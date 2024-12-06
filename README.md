@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Healthcare Facility Simulation
 
 A sophisticated healthcare facility simulation system that models the interactions between healthcare professionals, patients, and hospital resources using generative AI and the MIMIC-IV database.
@@ -84,3 +85,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 Igor H - [@IgorHWebDev](https://github.com/IgorHWebDev)
 
 Project Link: [https://github.com/IgorHWebDev/healthcare-simulation](https://github.com/IgorHWebDev/healthcare-simulation)
+=======
+# healthcare-simulation
+ Healthcare facility simulation system using generative AI and MIMIC-IV database
+>>>>>>> 1fb9e9add538b5c73268dab849384e3e312527a1
