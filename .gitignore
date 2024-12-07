@@ -31,9 +31,11 @@ env/
 *.swp
 *.swo
 
-# Environment variables
+# Environment variables and secrets
 .env
 .env.local
+*.env
+.secrets
 
 # Logs
 *.log
