@@ -12,7 +12,11 @@ setup(
         "typing-extensions>=4.6.3",
         "dataclasses>=0.6",
         "python-dotenv>=1.0.0",
-        "watchdog>=3.0.0"
+        "watchdog>=3.0.0",
+        "openai>=1.3.0",
+        "pandas>=2.0.0",
+        "numpy>=1.24.0",
+        "requests>=2.31.0"
     ],
     entry_points={
         "console_scripts": [

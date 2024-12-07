@@ -7,6 +7,13 @@ from ..config import OPENAI_API_KEY, MIMIC_DATABASE_PATH
 from .ai_integration import AIModelManager
 from dataclasses import dataclass
 
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    print("OpenAI package not available. Using mock responses.")
+    OPENAI_AVAILABLE = False
+
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 @dataclass
@@ -218,6 +225,14 @@ class AgentBrain:
             fatigue=0.0,
             patient_count=0
         )
+        self.openai_available = OPENAI_AVAILABLE
+        if self.openai_available:
+            try:
+                from ..config import OPENAI_API_KEY
+                openai.api_key = OPENAI_API_KEY
+            except (ImportError, AttributeError):
+                print("OpenAI API key not found. Using mock responses.")
+                self.openai_available = False
     
     def update(self):
         """Update agent state"""
@@ -432,3 +447,24 @@ class AgentBrain:
         except Exception as e:
             print(f"OpenAI API error: {str(e)}. Using fallback response.")
             return FallbackResponses.get_schedule_plan()
+    
+    def generate_response(self, prompt, context=None):
+        if not self.openai_available:
+            return self._generate_mock_response(prompt)
+            
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a healthcare professional."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Error generating OpenAI response: {e}")
+            return self._generate_mock_response(prompt)
+    
+    def _generate_mock_response(self, prompt):
+        """Generate a mock response when OpenAI is not available"""
+        return "This is a mock response for: " + prompt
