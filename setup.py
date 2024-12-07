@@ -5,14 +5,13 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
-        'streamlit',
-        'plotly',
-        'pandas',
-        'numpy',
-        'openai',
-        'python-dotenv'
+        "streamlit>=1.24.0",
+        "plotly>=5.14.0",
+        "python-dateutil>=2.8.2",
+        "typing-extensions>=4.6.3",
+        "dataclasses>=0.6"
     ],
-    author="Igor",
-    description="A healthcare facility simulation system with generative agents",
+    author="Cursor AI",
+    description="Healthcare Lifecycle Simulation",
     python_requires=">=3.8",
-) 
+)

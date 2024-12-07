@@ -1,11 +1,21 @@
 import openai
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import pandas as pd
 import random
 from ..config import OPENAI_API_KEY, MIMIC_DATABASE_PATH
+from .ai_integration import AIModelManager
+from dataclasses import dataclass
 
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+@dataclass
+class AgentState:
+    location: str
+    status: str
+    current_action: Optional[str]
+    fatigue: float
+    patient_count: int
 
 class FallbackResponses:
     """Predefined responses for when OpenAI API is unavailable."""
@@ -197,55 +207,183 @@ class MedicalKnowledgeBase:
         ]
 
 class AgentBrain:
-    def __init__(self, agent_type: str, specialization: Optional[str] = None):
-        self.memory = AgentMemory()
-        self.knowledge_base = MedicalKnowledgeBase()
-        self.agent_type = agent_type
-        self.specialization = specialization
+    def __init__(self, agent_id: str, role: str):
+        self.agent_id = agent_id
+        self.role = role
+        self.ai_manager = AIModelManager()
+        self.state = AgentState(
+            location="entrance",
+            status="available",
+            current_action=None,
+            fatigue=0.0,
+            patient_count=0
+        )
+    
+    def update(self):
+        """Update agent state"""
+        # Simplified state update
+        self.state.fatigue = min(1.0, self.state.fatigue + random.random() * 0.1)
+        if random.random() < 0.3:
+            self.state.location = random.choice(["ward", "office", "lab"])
+            self.state.current_action = random.choice(["consulting", "examining", "resting"])
+    
+    def get_state(self) -> AgentState:
+        """Get current agent state"""
+        return self.state
     
     def make_decision(self, situation: Dict) -> Dict:
+        """Make a decision using advanced AI analysis"""
         try:
-            recent_memories = self.memory.short_term[-3:]
-            relevant_reflections = [r for r in self.memory.reflections[-3:]]
+            # Analyze patient risk
+            risk_analysis = self.medical_analyzer.analyze_patient_risk(
+                patient_data=situation.get('patient_data', {}),
+                history=self.memory.short_term[-3:]
+            )
             
+            # Generate potential progression
+            progression = self.scenario_generator.generate_patient_progression(
+                current_state=situation,
+                time_window="1h"
+            )
+            
+            # Combine analyses for decision making
             prompt = f"""
             As a {self.agent_type} {'specialized in ' + self.specialization if self.specialization else ''},
-            analyze this situation and make a decision:
+            make a decision based on:
             
-            Current Situation:
-            {situation}
+            Risk Analysis: {risk_analysis}
+            Projected Progression: {progression}
+            Current Situation: {situation}
             
-            Recent Memories:
-            {recent_memories}
-            
-            Relevant Reflections:
-            {relevant_reflections}
-            
-            What action should be taken? Consider:
-            1. Medical priorities
-            2. Resource availability
-            3. Patient needs
-            4. Staff coordination
+            Provide specific actions and reasoning.
             """
             
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a healthcare professional making medical decisions."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            decision = response.choices[0].message.content
+            decision = self.ai_manager.generate_response(prompt, "medical", 0.7)
+            
         except Exception as e:
-            print(f"OpenAI API error: {str(e)}. Using fallback response.")
-            decision = FallbackResponses.get_decision()
+            print(f"AI decision making error: {str(e)}. Using fallback.")
+            decision = self.ai_manager._get_fallback_response("medical")
         
         return {
-            'action': decision.split('\n')[0],
+            'action': decision.split('\n')[0] if '\n' in decision else decision,
             'reasoning': decision,
+            'risk_analysis': risk_analysis if 'risk_analysis' in locals() else None,
+            'projected_progression': progression if 'progression' in locals() else None,
             'timestamp': datetime.now(),
             'context': situation
         }
+    
+    def handle_emergency(self, emergency_type: str, patient_id: str) -> Dict:
+        """Handle emergency situations using scenario generation"""
+        try:
+            # Generate detailed emergency scenario
+            scenario = self.scenario_generator.generate_emergency_scenario()
+            
+            # Analyze immediate risks
+            risk_analysis = self.medical_analyzer.analyze_patient_risk(
+                patient_data={"id": patient_id, "emergency_type": emergency_type},
+                history=self.memory.short_term
+            )
+            
+            # Get AI-generated response
+            prompt = f"""
+            Emergency situation:
+            Type: {emergency_type}
+            Scenario: {scenario}
+            Risk Analysis: {risk_analysis}
+            
+            As a {self.agent_type} {'specialized in ' + self.specialization if self.specialization else ''},
+            provide immediate action plan.
+            """
+            
+            response = self.ai_manager.generate_response(prompt, "emergency", 0.9)
+            
+        except Exception as e:
+            print(f"Emergency handling error: {str(e)}. Using fallback.")
+            response = self.ai_manager._get_fallback_response("emergency")
+        
+        return {
+            'action_plan': response,
+            'scenario': scenario if 'scenario' in locals() else None,
+            'risk_analysis': risk_analysis if 'risk_analysis' in locals() else None,
+            'timestamp': datetime.now()
+        }
+    
+    def generate_complex_case(self) -> Dict:
+        """Generate a complex medical case for simulation"""
+        try:
+            # Generate base case
+            case = self.scenario_generator.generate_complex_case()
+            
+            # Analyze case risks
+            risk_analysis = self.medical_analyzer.analyze_patient_risk(
+                patient_data=case,
+                history=None
+            )
+            
+            # Generate progression timeline
+            progression = self.scenario_generator.generate_patient_progression(
+                current_state=case,
+                time_window="24h"
+            )
+            
+            return {
+                'case_details': case,
+                'risk_analysis': risk_analysis,
+                'progression_timeline': progression,
+                'timestamp': datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Case generation error: {str(e)}. Using fallback.")
+            return {
+                'case_details': "Standard medical case",
+                'risk_level': "Moderate",
+                'required_actions': ["Standard protocols"]
+            }
+    
+    def analyze_treatment_plan(self, 
+                             treatment_data: Dict,
+                             patient_history: List[Dict]) -> Dict:
+        """Analyze and optimize treatment plans"""
+        try:
+            # Analyze treatment effectiveness
+            effectiveness = self.medical_analyzer.analyze_treatment_effectiveness(
+                treatment_data=treatment_data,
+                outcomes=patient_history
+            )
+            
+            # Generate potential progression
+            progression = self.scenario_generator.generate_patient_progression(
+                current_state={"treatment": treatment_data, "history": patient_history},
+                time_window="12h"
+            )
+            
+            # Get AI recommendations
+            prompt = f"""
+            Analyze treatment plan:
+            Current Treatment: {treatment_data}
+            Effectiveness Analysis: {effectiveness}
+            Projected Progression: {progression}
+            
+            Provide optimization recommendations.
+            """
+            
+            recommendations = self.ai_manager.generate_response(prompt, "analysis", 0.7)
+            
+            return {
+                'effectiveness_analysis': effectiveness,
+                'progression_projection': progression,
+                'recommendations': recommendations,
+                'timestamp': datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Treatment analysis error: {str(e)}. Using fallback.")
+            return {
+                'effectiveness': "Needs assessment",
+                'recommendations': ["Follow standard protocols"]
+            }
     
     def plan_schedule(self, current_patients: List[Dict], available_resources: Dict) -> List[Dict]:
         try:
@@ -294,42 +432,3 @@ class AgentBrain:
         except Exception as e:
             print(f"OpenAI API error: {str(e)}. Using fallback response.")
             return FallbackResponses.get_schedule_plan()
-    
-    def handle_emergency(self, emergency_info: Dict) -> Dict:
-        try:
-            prompt = f"""
-            As a {self.agent_type} {'specialized in ' + self.specialization if self.specialization else ''},
-            create an immediate response plan for this emergency:
-            
-            Emergency Details:
-            {emergency_info}
-            
-            Generate a detailed response plan including:
-            1. Immediate actions needed
-            2. Resource requirements
-            3. Team coordination
-            4. Patient stabilization steps
-            """
-            
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a healthcare professional handling an emergency."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            
-            plan = response.choices[0].message.content
-            
-            return {
-                'immediate_actions': plan.split('\n')[0],
-                'full_plan': plan,
-                'timestamp': datetime.now(),
-                'emergency_type': emergency_info.get('type', 'unknown')
-            }
-        except Exception as e:
-            print(f"OpenAI API error: {str(e)}. Using fallback response.")
-            fallback_plan = FallbackResponses.get_emergency_plan(emergency_info.get('type', 'unknown'))
-            fallback_plan['timestamp'] = datetime.now()
-            fallback_plan['emergency_type'] = emergency_info.get('type', 'unknown')
-            return fallback_plan 

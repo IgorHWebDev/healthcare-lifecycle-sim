@@ -1,293 +1,247 @@
-from datetime import datetime, timedelta
 import streamlit as st
 import os
 import time
 import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import random
+from typing import Dict
 from healthcare_sim.simulation_manager import SimulationManager
-from healthcare_sim.reports import add_report_section
 from healthcare_sim.visualization import (
-    create_timeline_visualization,
-    create_agent_path_visualization,
-    create_agent_status_cards,
-    create_event_frequency_charts,
-    create_patient_statistics
+    create_lifecycle_timeline,
+    create_stage_distribution,
+    create_genetic_timeline,
+    display_lifecycle_dashboard,
+    create_agent_path_visualization
 )
+from healthcare_sim.lifecycle.lifecycle_manager import LifecycleStage
 
 def format_duration(td: timedelta) -> str:
     """Format timedelta into a readable string."""
     minutes = td.total_seconds() / 60
     return f"{minutes}m"
 
-def create_simulation_stats(events, start_time):
-    """Create statistics from simulation events."""
-    stats = {
-        'total_events': len(events),
-        'emergency_count': len([e for e in events if e.get('type') == 'emergency']),
-        'elapsed_minutes': (datetime.now() - start_time).total_seconds() / 60,
-        'events_per_minute': len(events) / max(1, (datetime.now() - start_time).total_seconds() / 60)
-    }
-    return stats
-
 def reset_simulation():
     """Reset the simulation state."""
-    mimic_path = "/Users/igor/Downloads/mimic-iv-clinical-database-demo-2.2"
+    if 'simulation' not in st.session_state:
+        st.session_state.simulation = SimulationManager()
+        st.session_state.events = st.session_state.simulation.lifecycle_manager.get_patient_timeline("patient_789")
+        st.session_state.start_time = datetime.now()
+        st.session_state.is_running = False
+        st.session_state.is_paused = False
+        st.session_state.agent_paths = {}
+
+def display_facility_layout():
+    """Display facility layout in a more visual way."""
+    layout = st.session_state.simulation.get_facility_layout()
     
-    # Initialize all session state variables
-    if 'simulation_duration' not in st.session_state:
-        st.session_state.simulation_duration = timedelta(hours=4)
-    if 'duration_unit' not in st.session_state:
-        st.session_state.duration_unit = 'hours'
-    if 'auto_restart' not in st.session_state:
-        st.session_state.auto_restart = False
-    if 'emergency_frequency' not in st.session_state:
-        st.session_state.emergency_frequency = 'normal'
-    if 'show_agent_thoughts' not in st.session_state:
-        st.session_state.show_agent_thoughts = True
-    if 'debug_mode' not in st.session_state:
-        st.session_state.debug_mode = False
-    if 'simulation_speed' not in st.session_state:
-        st.session_state.simulation_speed = 0.5
+    # Display departments as columns
+    cols = st.columns(len(layout["departments"]))
+    for col, (dept_id, dept) in zip(cols, layout["departments"].items()):
+        with col:
+            st.markdown(f"### {dept['name']}")
+            for loc in dept['locations']:
+                st.markdown(f"- 📍 {loc}")
     
-    # Check if MIMIC data exists
-    if os.path.exists(mimic_path):
-        st.session_state.data_source = "MIMIC-IV Database"
+    # Display connections
+    st.markdown("### Department Connections")
+    for conn in layout["connections"]:
+        st.markdown(f"🔄 {conn[0]} ↔️ {conn[1]}")
+
+def display_stage_specific_interface(stage: LifecycleStage, lifecycle_manager):
+    """Display interface specific to the selected lifecycle stage."""
+    if stage == LifecycleStage.PRE_CONCEPTION:
+        st.subheader("Pre-conception Stage")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            with st.form("genetic_material"):
+                material_type = st.selectbox("Material Type", ["egg", "sperm"])
+                donor_id = st.text_input("Donor ID")
+                if st.form_submit_button("Register Material"):
+                    try:
+                        material_id = lifecycle_manager.register_genetic_material(
+                            material_type=material_type,
+                            donor_id=donor_id,
+                            genetic_markers={"marker1": "test"}
+                        )
+                        st.success(f"Registered {material_type} with ID: {material_id}")
+                    except Exception as e:
+                        st.error(f"Error registering material: {str(e)}")
+        
+        with col2:
+            st.markdown("### Registered Materials")
+            for material_id, material in lifecycle_manager.genetic_materials.items():
+                st.markdown(f"""
+                - **{material.material_type.title()}** (ID: {material_id})
+                  - Donor: {material.donor_id or 'Anonymous'}
+                  - Collected: {material.collection_date.strftime('%Y-%m-%d %H:%M')}
+                """)
+    
+    elif stage == LifecycleStage.CONCEPTION:
+        st.subheader("Conception Stage")
+        with st.form("conception_event"):
+            col1, col2 = st.columns(2)
+            with col1:
+                egg_materials = {k: v for k, v in lifecycle_manager.genetic_materials.items() 
+                               if v.material_type == "egg"}
+                sperm_materials = {k: v for k, v in lifecycle_manager.genetic_materials.items() 
+                                 if v.material_type == "sperm"}
+                
+                egg_id = st.selectbox("Select Egg", options=list(egg_materials.keys()))
+                sperm_id = st.selectbox("Select Sperm", options=list(sperm_materials.keys()))
+            
+            with col2:
+                location = st.text_input("Location")
+                providers = st.text_input("Healthcare Providers (comma-separated)")
+            
+            if st.form_submit_button("Create Conception Event"):
+                try:
+                    event_id = lifecycle_manager.create_lifecycle_event(
+                        patient_id="patient_789",
+                        stage=stage,
+                        description=f"IVF conception using egg {egg_id} and sperm {sperm_id}",
+                        location=location,
+                        providers=providers.split(",") if providers else ["Unknown"],
+                        genetic_data={
+                            "egg_id": egg_id,
+                            "sperm_id": sperm_id
+                        }
+                    )
+                    st.session_state.events = lifecycle_manager.get_patient_timeline("patient_789")
+                    st.success(f"Created conception event with ID: {event_id}")
+                except Exception as e:
+                    st.error(f"Error creating event: {str(e)}")
+    
     else:
-        st.session_state.data_source = "Synthetic Data"
-        mimic_path = None
-    
-    # Create new simulation instance
-    st.session_state.simulation = SimulationManager(mimic_path=mimic_path)
-    st.session_state.simulation.set_emergency_frequency(st.session_state.emergency_frequency)
-    st.session_state.events = []
-    st.session_state.start_time = datetime.now()
-    st.session_state.is_running = False
-    st.session_state.is_paused = False
-    st.session_state.agent_paths = {}
+        st.subheader(f"{stage.name} Stage")
+        with st.form("create_event"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                description = st.text_area("Event Description")
+                location = st.text_input("Location")
+            
+            with col2:
+                providers = st.text_input("Healthcare Providers (comma-separated)")
+                include_biometrics = st.checkbox("Include Biometric Data")
+            
+            if include_biometrics:
+                st.markdown("### Biometric Data")
+                bio_col1, bio_col2 = st.columns(2)
+                with bio_col1:
+                    height = st.number_input("Height (cm)", min_value=0.0)
+                    weight = st.number_input("Weight (kg)", min_value=0.0)
+                with bio_col2:
+                    blood_pressure = st.text_input("Blood Pressure (e.g., 120/80)")
+                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=0)
+            
+            if st.form_submit_button("Create Event"):
+                try:
+                    biometric_data = None
+                    if include_biometrics:
+                        biometric_data = {
+                            "height_cm": height,
+                            "weight_kg": weight,
+                            "blood_pressure": blood_pressure,
+                            "heart_rate_bpm": heart_rate
+                        }
+                    
+                    event_id = lifecycle_manager.create_lifecycle_event(
+                        patient_id="patient_789",
+                        stage=stage,
+                        description=description,
+                        location=location,
+                        providers=providers.split(",") if providers else ["Unknown"],
+                        biometric_data=biometric_data
+                    )
+                    st.session_state.events = lifecycle_manager.get_patient_timeline("patient_789")
+                    st.success(f"Created event with ID: {event_id}")
+                except Exception as e:
+                    st.error(f"Error creating event: {str(e)}")
 
 def display_interface():
     """Display the main simulation interface."""
-    # Top bar with simulation status and controls
-    status_col1, status_col2, status_col3, status_col4 = st.columns([1, 2, 1, 1])
-    
-    with status_col1:
-        if st.session_state.is_running and not st.session_state.is_paused:
-            st.success("🟢 Running")
-        elif st.session_state.is_paused:
-            st.warning("⏸️ Paused")
-        else:
-            st.error("🔴 Stopped")
-    
-    with status_col2:
-        stats = create_simulation_stats(st.session_state.events, st.session_state.start_time)
-        progress = min((datetime.now() - st.session_state.start_time) / st.session_state.simulation_duration, 1.0)
-        remaining_time = st.session_state.simulation_duration - (datetime.now() - st.session_state.start_time)
-        if remaining_time.total_seconds() > 0:
-            progress_text = f"Progress: {min(progress*100, 100):.1f}% (Remaining: {format_duration(remaining_time)})"
-        else:
-            progress_text = "Progress: 100.0% (Completed)"
-        st.progress(min(progress, 1.0), text=progress_text)
-    
-    with status_col3:
-        st.metric("Events/Minute", stats['events_per_minute'])
-    
-    with status_col4:
-        st.metric("Active Agents", len(st.session_state.simulation.agents))
-    
-    # Main title and data source
-    st.title("Healthcare Facility Simulation")
-    st.caption(f"Using {st.session_state.data_source}")
-    
-    # Sidebar controls
-    with st.sidebar:
-        st.header("Simulation Controls")
-        
-        # Control buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("▶️ Start" if not st.session_state.is_running else "⏹️ Stop", type="primary"):
-                st.session_state.is_running = not st.session_state.is_running
-                st.session_state.is_paused = False
-        with col2:
-            if st.button("⏸️ Pause" if not st.session_state.is_paused else "⏵️ Resume", disabled=not st.session_state.is_running):
-                st.session_state.is_paused = not st.session_state.is_paused
-        
-        if st.button("🔄 Reset Simulation", type="secondary"):
-            reset_simulation()
-            st.rerun()
-        
-        # Advanced settings
-        with st.expander("⚙️ Advanced Settings", expanded=False):
-            st.checkbox("🔄 Auto-restart on completion", key="auto_restart")
-            st.checkbox("💭 Show agent thoughts", key="show_agent_thoughts")
-            st.checkbox("🐛 Debug mode", key="debug_mode")
-            
-            st.selectbox(
-                "🚨 Emergency Frequency",
-                options=['low', 'normal', 'high'],
-                key="emergency_frequency"
-            )
-        
-        # Simulation duration
-        st.subheader("⏱️ Duration Settings")
-        
-        # Duration unit selection
-        duration_unit = st.radio(
-            "Time Unit",
-            options=['minutes', 'hours'],
-            horizontal=True,
-            key='duration_unit'
-        )
-        
-        # Duration input based on selected unit
-        if duration_unit == 'minutes':
-            minutes = st.slider("Duration (minutes)", 1, 1440, 240)
-            st.session_state.simulation_duration = timedelta(minutes=minutes)
-            st.caption(f"Equivalent to {minutes/60:.1f} hours")
-        else:  # hours
-            hours = st.slider("Duration (hours)", 1, 24, 4)
-            st.session_state.simulation_duration = timedelta(hours=hours)
-            st.caption(f"Equivalent to {hours*60} minutes")
-        
-        # Display total duration
-        st.info(f"⏰ Total simulation time: {format_duration(st.session_state.simulation_duration)}")
-        
-        # Simulation speed
-        st.subheader("⚡ Speed Settings")
-        st.session_state.simulation_speed = st.slider(
-            "Steps per second",
-            min_value=0.1,
-            max_value=5.0,
-            value=st.session_state.simulation_speed,
-            step=0.1,
-            help="Higher values = faster simulation"
-        )
-        
-        # Statistics
-        st.subheader("📊 Statistics")
-        st.metric("Total Events", stats['total_events'])
-        st.metric("Emergency Events", stats['emergency_count'])
-        st.metric("Elapsed Time", f"{stats['elapsed_minutes']:.1f} min")
-        
-        if st.session_state.debug_mode:
-            st.subheader("🐛 Debug Information")
-            st.json({
-                "running": st.session_state.is_running,
-                "paused": st.session_state.is_paused,
-                "progress": f"{progress*100:.1f}%",
-                "events": len(st.session_state.events),
-                "agents": len(st.session_state.agent_paths)
-            })
+    st.title("Healthcare Lifecycle Simulation")
     
     # Main content area
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "Activity Timeline",
-        "Facility Layout and Agent Movements",
-        "Event Frequency",
-        "Patient Statistics",
-        "Reports"
+        "Facility Layout",
+        "🧬 Lifecycle Management"
     ])
     
     with tab1:
-        # Timeline visualization
         st.header("Activity Timeline")
-        timeline = create_timeline_visualization(
-            st.session_state.events,
-            st.session_state.start_time,
-            datetime.now()
-        )
-        if timeline:
-            st.plotly_chart(timeline, use_container_width=True)
-        
-        # Agent movement visualization
-        st.header("Facility Layout and Agent Movements")
-        movement_viz = create_agent_path_visualization(
-            st.session_state.agent_paths,
-            st.session_state.simulation.environment
-        )
-        st.plotly_chart(movement_viz, use_container_width=True)
+        if not st.session_state.events:
+            st.info("No events recorded yet. Use the Lifecycle Management tab to create events.")
+        else:
+            try:
+                timeline = create_lifecycle_timeline(st.session_state.events)
+                if timeline:
+                    st.plotly_chart(timeline, use_container_width=True)
+                    
+                # Show event distribution
+                distribution = create_stage_distribution(st.session_state.events)
+                if distribution:
+                    st.plotly_chart(distribution, use_container_width=True)
+                    
+                # Show event details
+                st.subheader("Event Details")
+                for event in sorted(st.session_state.events, key=lambda e: e.timestamp, reverse=True):
+                    with st.expander(f"{event.stage.name} - {event.timestamp.strftime('%Y-%m-%d %H:%M')}"):
+                        st.markdown(f"""
+                        **Description:** {event.description}
+                        **Location:** {event.location}
+                        **Providers:** {', '.join(event.providers)}
+                        """)
+                        
+                        if event.biometric_data:
+                            st.markdown("**Biometric Data:**")
+                            for key, value in event.biometric_data.items():
+                                st.markdown(f"- {key}: {value}")
+                        
+                        if event.genetic_data:
+                            st.markdown("**Genetic Data:**")
+                            for key, value in event.genetic_data.items():
+                                st.markdown(f"- {key}: {value}")
+            except Exception as e:
+                st.error(f"Error creating timeline: {str(e)}")
     
     with tab2:
-        # Healthcare Professional Status
-        st.header("Healthcare Professionals")
-        create_agent_status_cards(st.session_state.simulation)
+        st.header("Facility Layout")
+        display_facility_layout()
     
     with tab3:
-        # Event Frequency Analysis
-        st.header("Event Analysis")
-        create_event_frequency_charts(st.session_state.events)
-    
-    with tab4:
-        # Patient Statistics
-        st.header("Patient Statistics")
-        create_patient_statistics(st.session_state.simulation)
-    
-    with tab5:
-        # Reports
-        add_report_section(st)
+        st.header("🧬 Lifecycle Management")
+        try:
+            # Get lifecycle manager
+            lifecycle_manager = st.session_state.simulation.lifecycle_manager
+            
+            # Lifecycle stage selector
+            stage = st.selectbox(
+                "Select Lifecycle Stage",
+                options=list(LifecycleStage)
+            )
+            
+            # Display stage-specific interface
+            display_stage_specific_interface(stage, lifecycle_manager)
+                
+        except Exception as e:
+            st.error(f"Error in lifecycle management: {str(e)}")
 
 def main():
-    st.set_page_config(page_title="Healthcare Simulation", layout="wide")
+    st.set_page_config(
+        page_title="Healthcare Simulation",
+        page_icon="🏥",
+        layout="wide"
+    )
     
-    # Initialize session state
+    # Initialize simulation if needed
     if 'simulation' not in st.session_state:
         reset_simulation()
     
-    # Update emergency frequency when changed
-    if 'emergency_frequency' in st.session_state:
-        st.session_state.simulation.set_emergency_frequency(st.session_state.emergency_frequency)
-    
-    # Calculate elapsed time and check if simulation should stop
-    elapsed_time = datetime.now() - st.session_state.start_time
-    if elapsed_time >= st.session_state.simulation_duration and st.session_state.is_running:
-        st.session_state.is_running = False
-        st.warning("⏰ Simulation completed! Duration reached.")
-        if st.session_state.auto_restart:
-            reset_simulation()
-            st.session_state.is_running = True
-            st.info("🔄 Auto-restarting simulation...")
-    
-    # Safety check - stop if no events after certain time
-    if st.session_state.is_running and elapsed_time.total_seconds() > 30 and len(st.session_state.events) == 0:
-        st.session_state.is_running = False
-        st.error("⚠️ Simulation stopped: No events generated. Please check configuration and try again.")
-        if st.button("🔄 Restart Simulation"):
-            reset_simulation()
-            st.session_state.is_running = True
-            st.rerun()
-    
     # Display interface
     display_interface()
-    
-    # Run simulation
-    if st.session_state.is_running and not st.session_state.is_paused:
-        try:
-            # Process multiple steps per update for smoother performance
-            steps_per_update = max(1, int(st.session_state.simulation_duration.total_seconds() / 100))
-            for _ in range(steps_per_update):
-                if elapsed_time < st.session_state.simulation_duration:
-                    events = st.session_state.simulation.step()
-                    if events:
-                        st.session_state.events.extend(events)
-                        for event in events:
-                            agent_id = event.get('agent_id')
-                            if agent_id and agent_id not in st.session_state.agent_paths:
-                                st.session_state.agent_paths[agent_id] = []
-                            if agent_id and 'location' in event:
-                                st.session_state.agent_paths[agent_id].append(event['location'])
-                else:
-                    st.session_state.is_running = False
-                    break
-            
-            # Add small delay based on simulation speed
-            time.sleep(1/max(0.1, st.session_state.simulation_speed))
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Simulation error: {str(e)}")
-            st.session_state.is_running = False
-            if st.button("🔄 Restart After Error"):
-                reset_simulation()
-                st.rerun()
 
 if __name__ == "__main__":
     main() 

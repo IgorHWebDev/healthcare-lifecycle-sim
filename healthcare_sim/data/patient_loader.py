@@ -128,23 +128,35 @@ class PatientDataLoader:
     
     def load_mimic_data(self):
         """Load data from MIMIC-IV database."""
-        self.patients_df = pd.read_csv(
-            os.path.join(self.mimic_path, 'patients.csv'),
-            parse_dates=['dob']
-        )
-        
-        self.admissions_df = pd.read_csv(
-            os.path.join(self.mimic_path, 'admissions.csv'),
-            parse_dates=['admittime', 'dischtime', 'deathtime']
-        )
-        
-        self.diagnoses_df = pd.read_csv(
-            os.path.join(self.mimic_path, 'diagnoses_icd.csv')
-        )
-        
-        self.procedures_df = pd.read_csv(
-            os.path.join(self.mimic_path, 'procedures_icd.csv')
-        )
+        def load_csv(filename):
+            # Try uncompressed file first
+            filepath = os.path.join(self.mimic_path, filename)
+            if os.path.exists(filepath):
+                return pd.read_csv(filepath)
+            # Try compressed file
+            gz_filepath = filepath + '.gz'
+            if os.path.exists(gz_filepath):
+                return pd.read_csv(gz_filepath, compression='gzip')
+            raise FileNotFoundError(f"Neither {filepath} nor {gz_filepath} found")
+
+        try:
+            self.patients_df = load_csv('patients.csv')
+            self.admissions_df = load_csv('admissions.csv')
+            self.diagnoses_df = load_csv('diagnoses_icd.csv')
+            self.procedures_df = load_csv('procedures_icd.csv')
+            
+            # Convert date columns
+            if 'dob' in self.patients_df.columns:
+                self.patients_df['dob'] = pd.to_datetime(self.patients_df['dob'])
+            if 'admittime' in self.admissions_df.columns:
+                self.admissions_df['admittime'] = pd.to_datetime(self.admissions_df['admittime'])
+            if 'dischtime' in self.admissions_df.columns:
+                self.admissions_df['dischtime'] = pd.to_datetime(self.admissions_df['dischtime'])
+            if 'deathtime' in self.admissions_df.columns:
+                self.admissions_df['deathtime'] = pd.to_datetime(self.admissions_df['deathtime'])
+        except Exception as e:
+            print(f"Error loading MIMIC data: {str(e)}")
+            raise
     
     def get_patient_info(self, patient_id: str) -> Dict:
         """Get comprehensive patient information."""
@@ -169,19 +181,27 @@ class PatientDataLoader:
         }
     
     def get_active_patients(self) -> List[Dict]:
-        """Get list of currently admitted patients."""
+        """Get list of patients from the last 30 days."""
         current_time = datetime.now()
-        active_admissions = self.admissions_df[
-            (self.admissions_df['admittime'] <= current_time) &
+        thirty_days_ago = current_time - timedelta(days=30)
+        
+        # Get all admissions from the last 30 days
+        recent_admissions = self.admissions_df[
+            ((self.admissions_df['admittime'] >= thirty_days_ago) & 
+             (self.admissions_df['admittime'] <= current_time)) |
             ((self.admissions_df['dischtime'].isna()) | 
-             (self.admissions_df['dischtime'] >= current_time))
+             (self.admissions_df['dischtime'] >= thirty_days_ago))
         ]
         
         active_patients = []
-        for _, admission in active_admissions.iterrows():
-            patient_info = self.get_patient_info(admission['subject_id'])
-            patient_info['current_location'] = admission['admission_location']
-            active_patients.append(patient_info)
+        for _, admission in recent_admissions.iterrows():
+            try:
+                patient_info = self.get_patient_info(admission['subject_id'])
+                patient_info['current_location'] = admission['admission_location']
+                active_patients.append(patient_info)
+            except Exception as e:
+                print(f"Error processing patient {admission['subject_id']}: {str(e)}")
+                continue
         
         return active_patients
     

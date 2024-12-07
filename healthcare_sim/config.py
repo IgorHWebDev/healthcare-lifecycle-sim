@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-MIMIC_DATABASE_PATH = "/Users/igor/Downloads/mimic-iv-clinical-database-demo-2.2"
+MIMIC_DATABASE_PATH = os.getenv('MIMIC_DATABASE_PATH', "/Users/igor/Downloads/mimic-iv-clinical-database-demo-2.2")
 
 # OpenAI configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # Store your API key in .env file

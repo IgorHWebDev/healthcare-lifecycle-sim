@@ -1,91 +1,112 @@
-<<<<<<< HEAD
-# Healthcare Facility Simulation
+# Healthcare Lifecycle Simulation
 
-A sophisticated healthcare facility simulation system that models the interactions between healthcare professionals, patients, and hospital resources using generative AI and the MIMIC-IV database.
-
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+A comprehensive healthcare simulation system that models patient lifecycle from pre-conception through neonatal care, with emphasis on patient safety and identity verification.
 
 ## Features
 
 - Real-time simulation of healthcare facility operations
-- Integration with MIMIC-IV clinical database
-- AI-powered agent behavior and decision making
-- Interactive visualization and monitoring
-- Comprehensive reporting system
-- Dynamic event generation and handling
-- Resource management and allocation
-
-## Requirements
-
-- Python 3.11+
-- MIMIC-IV database access (optional)
-- OpenAI API key (for advanced agent behavior)
+- Patient lifecycle tracking from pre-conception to neonatal care
+- Genetic material management and tracking
+- Staff and resource allocation
+- Risk assessment and monitoring
+- Interactive visualization of patient journeys
+- Department capacity management
+- Event logging and analysis
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/IgorHWebDev/healthcare-simulation.git
-cd healthcare-simulation
+git clone https://github.com/yourusername/healthcare-sim.git
+cd healthcare-sim
 ```
 
-2. Install dependencies:
+2. Create a virtual environment:
 ```bash
-pip install -e .
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Set up environment variables:
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Create a `.env` file with your configuration:
 ```bash
 cp healthcare_sim/.env.example healthcare_sim/.env
-# Edit .env with your OpenAI API key
 ```
 
-4. (Optional) Configure MIMIC-IV database path in `config.py`
+## Running the Application
+
+1. Start the Streamlit server:
+```bash
+streamlit run healthcare_sim/run.py
+```
+
+2. Open your browser and navigate to:
+```
+http://localhost:8501
+```
 
 ## Usage
 
-Run the simulation:
-```bash
-streamlit run healthcare_sim/gui.py
-```
+### Simulation Controls
 
-## Configuration
+- **Start/Stop**: Control simulation execution
+- **Pause/Resume**: Temporarily halt simulation
+- **Reset**: Start fresh simulation
 
-- Emergency Frequency: low/normal/high
-- Simulation Duration: minutes/hours
-- Simulation Speed: 0.1-5.0 steps/second
-- Auto-restart option
-- Debug mode
-- Agent thought visibility
+### Parameters
 
-## Components
+1. Time Settings
+   - Simulation Speed (0.1x - 5.0x)
+   - Time Scale (seconds/minutes/hours/days)
 
-- **Simulation Manager**: Core simulation engine
-- **Agents**: Healthcare professionals with AI-driven behavior
-- **Environment**: Hospital layout and resource management
-- **Visualization**: Real-time monitoring and analytics
-- **Reports**: Healthcare standard compliant documentation
+2. Event Generation
+   - Auto-generate Events toggle
+   - Risk Level adjustment (low/normal/high)
+
+3. Department Settings
+   - Capacity configuration
+   - Staff allocation
+   - Equipment management
+
+### Monitoring
+
+1. Dashboard
+   - Real-time status
+   - Timeline visualization
+   - Event distribution
+
+2. Patients & Staff
+   - Current patient status
+   - Staff assignments
+   - Department occupancy
+
+3. Facility Status
+   - Department layout
+   - Equipment status
+   - Capacity metrics
+
+4. Event Log
+   - Chronological event tracking
+   - Severity indicators
+   - Detailed event information
+
+## Deployment
+
+1. Ensure all dependencies are in `requirements.txt`
+2. Configure environment variables in `.env`
+3. Test locally with `streamlit run healthcare_sim/run.py`
+4. Deploy to your preferred platform (Streamlit Cloud, Heroku, etc.)
+
+## Security Notes
+
+- Keep `.env` file secure and never commit to version control
+- Configure proper access controls in production
+- Regularly update dependencies for security patches
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## Contact
-
-Igor H - [@IgorHWebDev](https://github.com/IgorHWebDev)
-
-Project Link: [https://github.com/IgorHWebDev/healthcare-simulation](https://github.com/IgorHWebDev/healthcare-simulation)
-=======
-# healthcare-simulation
- Healthcare facility simulation system using generative AI and MIMIC-IV database
->>>>>>> 1fb9e9add538b5c73268dab849384e3e312527a1
+This project is licensed under the MIT License - see the LICENSE file for details.
