@@ -1,235 +1,114 @@
 import streamlit as st
-import plotly.graph_objects as go
-import networkx as nx
-from typing import Dict, List
-from datetime import datetime
+from typing import Dict, List, Optional
 
-def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> go.Figure:
-    """Create a visualization of agent movements in the facility"""
-    # Create a graph of the facility layout
-    G = nx.Graph()
+# Try to import visualization dependencies
+try:
+    import networkx as nx
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    VISUALIZATION_AVAILABLE = True
+except ImportError:
+    print("Visualization packages not available. Using simplified visualization.")
+    VISUALIZATION_AVAILABLE = False
+
+def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[plt.Figure]:
+    """Create a visualization of agent paths through the facility"""
+    if not VISUALIZATION_AVAILABLE:
+        st.warning("Advanced visualization not available. Please install networkx and matplotlib.")
+        return None
     
-    # Add basic facility locations
-    locations = [
-        "entrance", "waiting_room", "triage", "er", "icu", "ward",
-        "pharmacy", "lab", "imaging", "surgery", "staff_room"
-    ]
-    
-    # Add nodes and edges to create facility layout
-    G.add_nodes_from(locations)
-    G.add_edges_from([
-        ("entrance", "waiting_room"),
-        ("waiting_room", "triage"),
-        ("triage", "er"),
-        ("er", "icu"),
-        ("er", "ward"),
-        ("ward", "pharmacy"),
-        ("ward", "lab"),
-        ("ward", "imaging"),
-        ("er", "surgery"),
-        ("staff_room", "ward")
-    ])
-    
-    # Calculate layout
-    pos = nx.spring_layout(G)
-    
-    # Create figure
-    fig = go.Figure()
-    
-    # Add edges (corridors)
-    edge_x = []
-    edge_y = []
-    for edge in G.edges():
-        x0, y0 = pos[edge[0]]
-        x1, y1 = pos[edge[1]]
-        edge_x.extend([x0, x1, None])
-        edge_y.extend([y0, y1, None])
-    
-    fig.add_trace(go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='gray'),
-        hoverinfo='none',
-        mode='lines',
-        name='Corridors'
-    ))
-    
-    # Add nodes (locations)
-    node_x = []
-    node_y = []
-    node_text = []
-    for node in G.nodes():
-        x, y = pos[node]
-        node_x.append(x)
-        node_y.append(y)
-        node_text.append(node.replace('_', ' ').title())
-    
-    fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        name='Locations',
-        marker=dict(
-            size=20,
-            color='lightblue',
-            line_width=2
-        ),
-        text=node_text,
-        textposition="top center"
-    ))
-    
-    # Add agent paths
-    for agent_id, path in agent_paths.items():
-        path_x = []
-        path_y = []
-        for location in path:
-            if location in pos:
-                x, y = pos[location]
-                path_x.append(x)
-                path_y.append(y)
+    try:
+        G = nx.Graph()
         
-        fig.add_trace(go.Scatter(
-            x=path_x, y=path_y,
-            mode='lines+markers',
-            name=f'Agent {agent_id}',
-            line=dict(width=2, dash='dot'),
-            marker=dict(size=8)
-        ))
-    
-    # Update layout
-    fig.update_layout(
-        title='Facility Layout and Agent Movements',
-        showlegend=True,
-        hovermode='closest',
-        margin=dict(b=20,l=5,r=5,t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        height=600
-    )
-    
-    return fig
+        # Add nodes and edges from paths
+        for agent_id, path in agent_paths.items():
+            for i in range(len(path) - 1):
+                G.add_edge(path[i], path[i + 1])
+        
+        # Create layout
+        pos = nx.spring_layout(G)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Draw network
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+               node_size=1500, font_size=10, font_weight='bold',
+               ax=ax)
+        
+        return fig
+    except Exception as e:
+        st.error(f"Error creating path visualization: {e}")
+        return None
 
-def create_agent_status_cards(simulation_manager) -> None:
-    """Create status cards for each healthcare agent"""
-    # Get all staff members
-    staff = simulation_manager.get_all_staff()
+def create_agent_status_cards(agents_data: Dict[str, Dict]) -> None:
+    """Create status cards for agents"""
+    if not agents_data:
+        st.info("No agent data available")
+        return
     
-    # Create columns for staff cards
     cols = st.columns(3)
-    col_idx = 0
-    
-    for staff_id, staff_member in staff.items():
-        with cols[col_idx]:
-            st.markdown(f"### {staff_member['name']}")
-            st.markdown(f"**Role:** {staff_member['role']}")
-            st.markdown(f"**Location:** {staff_member['location']}")
-            st.markdown(f"**Status:** {staff_member['status']}")
-            
-            # Create progress bar for fatigue
-            fatigue = staff_member.get('fatigue', 0)
-            st.progress(fatigue/100.0, f"Fatigue: {fatigue}%")
-            
-            # Show current task if any
-            if staff_member.get('current_action'):
-                st.info(f"Current Task: {staff_member['current_action']}")
-            
-            st.markdown("---")
-        
-        # Move to next column
-        col_idx = (col_idx + 1) % 3
+    for i, (agent_id, data) in enumerate(agents_data.items()):
+        with cols[i % 3]:
+            st.markdown(f"### 👤 Agent {agent_id}")
+            st.metric("Location", data.get("location", "Unknown"))
+            st.metric("Status", data.get("status", "Unknown"))
+            st.progress(1 - float(data.get("fatigue", 0)))
 
 def create_event_frequency_charts(events: List[Dict]) -> None:
-    """Create charts showing event frequency analysis"""
-    # Count events by type
-    event_types = {}
-    for event in events:
-        event_type = event.get('type', 'unknown')
-        event_types[event_type] = event_types.get(event_type, 0) + 1
+    """Create charts showing event frequencies"""
+    if not events:
+        st.info("No event data available")
+        return
     
-    # Create bar chart
-    fig = go.Figure(data=[
-        go.Bar(
-            x=list(event_types.keys()),
-            y=list(event_types.values()),
-            text=list(event_types.values()),
-            textposition='auto',
-        )
-    ])
-    
-    fig.update_layout(
-        title='Event Distribution by Type',
-        xaxis_title='Event Type',
-        yaxis_title='Count',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Create timeline of events
-    times = [event.get('timestamp', datetime.now()) for event in events]
-    event_counts = list(range(1, len(events) + 1))
-    
-    fig = go.Figure(data=[
-        go.Scatter(
-            x=times,
-            y=event_counts,
-            mode='lines+markers',
-            name='Cumulative Events'
-        )
-    ])
-    
-    fig.update_layout(
-        title='Event Timeline',
-        xaxis_title='Time',
-        yaxis_title='Cumulative Event Count',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        import pandas as pd
+        
+        # Convert events to DataFrame
+        df = pd.DataFrame(events)
+        
+        # Event types distribution
+        st.subheader("Event Type Distribution")
+        event_counts = df["type"].value_counts()
+        st.bar_chart(event_counts)
+        
+        # Time-based distribution
+        st.subheader("Events Over Time")
+        df["hour"] = pd.to_datetime(df["timestamp"]).dt.hour
+        hourly_counts = df["hour"].value_counts().sort_index()
+        st.line_chart(hourly_counts)
+        
+    except Exception as e:
+        st.error(f"Error creating event charts: {e}")
 
-def create_patient_statistics(simulation_manager) -> None:
-    """Create visualizations of patient statistics"""
-    # Get all patients
-    patients = simulation_manager.get_all_patients()
+def create_patient_statistics(patient_data: List[Dict]) -> None:
+    """Create patient statistics visualization"""
+    if not patient_data:
+        st.info("No patient data available")
+        return
     
-    # Count patients by condition
-    conditions = {}
-    locations = {}
-    for patient in patients.values():
-        condition = patient.get('condition', 'unknown')
-        location = patient.get('location', 'unknown')
-        conditions[condition] = conditions.get(condition, 0) + 1
-        locations[location] = locations.get(location, 0) + 1
-    
-    # Create condition distribution chart
-    fig = go.Figure(data=[
-        go.Pie(
-            labels=list(conditions.keys()),
-            values=list(conditions.values()),
-            hole=.3
-        )
-    ])
-    
-    fig.update_layout(
-        title='Patient Distribution by Condition',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Create location distribution chart
-    fig = go.Figure(data=[
-        go.Bar(
-            x=list(locations.keys()),
-            y=list(locations.values()),
-            text=list(locations.values()),
-            textposition='auto',
-        )
-    ])
-    
-    fig.update_layout(
-        title='Patient Distribution by Location',
-        xaxis_title='Location',
-        yaxis_title='Count',
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True) 
+    try:
+        # Basic statistics
+        total_patients = len(patient_data)
+        avg_stay = sum(p.get("stay_duration", 0) for p in patient_data) / total_patients
+        
+        # Display metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Patients", total_patients)
+        with col2:
+            st.metric("Average Stay (hours)", f"{avg_stay:.1f}")
+        with col3:
+            st.metric("Occupancy Rate", f"{(total_patients / 50 * 100):.1f}%")
+        
+        # Department distribution
+        dept_counts = {}
+        for p in patient_data:
+            dept = p.get("department", "Unknown")
+            dept_counts[dept] = dept_counts.get(dept, 0) + 1
+        
+        st.subheader("Patient Distribution by Department")
+        st.bar_chart(dept_counts)
+        
+    except Exception as e:
+        st.error(f"Error creating patient statistics: {e}") 
