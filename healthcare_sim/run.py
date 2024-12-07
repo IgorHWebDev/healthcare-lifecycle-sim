@@ -1,9 +1,14 @@
+import os
+import sys
+from pathlib import Path
+
+# Add the parent directory to Python path
+sys.path.append(str(Path(__file__).parent.parent))
+
 import streamlit as st
 from datetime import datetime, timedelta
-from streamlit_config import init_streamlit
-from simulation_manager import SimulationManager
-from lifecycle.lifecycle_manager import LifecycleStage
-from visualization import (
+from healthcare_sim import SimulationManager, LifecycleStage
+from healthcare_sim.visualization import (
     create_lifecycle_timeline,
     create_stage_distribution,
     create_genetic_timeline,
@@ -12,8 +17,11 @@ from visualization import (
 )
 
 def main():
-    # Initialize Streamlit configuration
-    init_streamlit()
+    st.set_page_config(
+        page_title="Healthcare Simulation",
+        page_icon="🏥",
+        layout="wide"
+    )
     
     st.title("Healthcare Lifecycle Simulation")
     
