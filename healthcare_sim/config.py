@@ -1,19 +1,23 @@
 import os
+import streamlit as st
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables (for local development)
 load_dotenv()
 
-# Database configuration
-MIMIC_DATABASE_PATH = os.getenv('MIMIC_DATABASE_PATH', "/Users/igor/Downloads/mimic-iv-clinical-database-demo-2.2")
-
-# OpenAI configuration
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # Store your API key in .env file
+# Configuration with fallback to environment variables
+OPENAI_API_KEY = st.secrets["openai"]["api_key"] if "openai" in st.secrets else os.getenv('OPENAI_API_KEY')
+MIMIC_DATABASE_PATH = st.secrets["database"]["mimic_path"] if "database" in st.secrets else os.getenv('MIMIC_DATABASE_PATH')
 
 # Simulation settings
-SIMULATION_STEP_DURATION = 10  # seconds
-MAX_MEMORY_COUNT = 100
-REFLECTION_THRESHOLD = 5
+SIMULATION_STEP_DURATION = int(st.secrets["simulation"]["step_duration"] if "simulation" in st.secrets else os.getenv('SIMULATION_STEP_DURATION', 10))
+DEBUG_MODE = st.secrets["simulation"]["debug_mode"] if "simulation" in st.secrets else os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+
+# Default settings
+DEFAULT_EMERGENCY_FREQUENCY = st.secrets["default_settings"]["emergency_frequency"] if "default_settings" in st.secrets else "normal"
+DEFAULT_SIMULATION_DURATION = int(st.secrets["default_settings"]["simulation_duration"] if "default_settings" in st.secrets else 240)
+DEFAULT_SIMULATION_SPEED = float(st.secrets["default_settings"]["simulation_speed"] if "default_settings" in st.secrets else 0.5)
+SHOW_AGENT_THOUGHTS = st.secrets["default_settings"]["show_agent_thoughts"] if "default_settings" in st.secrets else True
 
 # Hospital settings
 DEPARTMENTS = {
