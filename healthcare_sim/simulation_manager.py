@@ -1,8 +1,15 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import random
-from .intelligence.ai_integration import AIModelManager
-from .lifecycle.lifecycle_manager import LifecycleManager, LifecycleStage
+from healthcare_sim.intelligence.ai_integration import AIModelManager
+from healthcare_sim.lifecycle.lifecycle_manager import LifecycleManager, LifecycleStage, LifecycleEvent
+from healthcare_sim.config import (
+    DEPARTMENTS,
+    SIMULATION_STEP_DURATION,
+    DEFAULT_EMERGENCY_FREQUENCY,
+    DEFAULT_SIMULATION_DURATION,
+    DEFAULT_SIMULATION_SPEED
+)
 
 class SimulationManager:
     def __init__(self):

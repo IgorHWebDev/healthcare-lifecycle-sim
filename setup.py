@@ -14,6 +14,11 @@ setup(
         "python-dotenv>=1.0.0",
         "watchdog>=3.0.0"
     ],
+    entry_points={
+        "console_scripts": [
+            "healthcare-sim=healthcare_sim.__main__:main",
+        ],
+    },
     author="Healthcare Sim Team",
     description="Healthcare Lifecycle Simulation",
     python_requires=">=3.8",
