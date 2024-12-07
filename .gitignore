@@ -52,3 +52,4 @@ Thumbs.db
 # Application specific
 healthcare_sim/data/mimic/*
 !healthcare_sim/data/mimic/.gitkeep
+.streamlit/secrets.toml
