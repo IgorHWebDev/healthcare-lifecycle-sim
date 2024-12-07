@@ -1,8 +1,8 @@
 import streamlit as st
 from datetime import datetime, timedelta
-from healthcare_sim.simulation_manager import SimulationManager
-from healthcare_sim.lifecycle.lifecycle_manager import LifecycleStage
-from healthcare_sim.visualization import (
+from simulation_manager import SimulationManager
+from lifecycle.lifecycle_manager import LifecycleStage
+from visualization import (
     create_lifecycle_timeline,
     create_stage_distribution,
     create_genetic_timeline,
