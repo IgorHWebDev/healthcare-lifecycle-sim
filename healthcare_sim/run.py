@@ -3,11 +3,17 @@ import sys
 from pathlib import Path
 
 # Add the parent directory to Python path
-sys.path.append(str(Path(__file__).parent.parent))
+current_dir = Path(__file__).parent
+project_root = current_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import streamlit as st
 from datetime import datetime, timedelta
-from healthcare_sim import SimulationManager, LifecycleStage
+
+# Import from the package
+from healthcare_sim.simulation_manager import SimulationManager
+from healthcare_sim.lifecycle.lifecycle_manager import LifecycleStage
 from healthcare_sim.visualization import (
     create_lifecycle_timeline,
     create_stage_distribution,
