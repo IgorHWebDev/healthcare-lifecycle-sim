@@ -1,8 +1,9 @@
 import streamlit as st
 from datetime import datetime, timedelta
-from healthcare_sim.simulation_manager import SimulationManager
-from healthcare_sim.lifecycle.lifecycle_manager import LifecycleStage
-from healthcare_sim.visualization import (
+from streamlit_config import init_streamlit
+from simulation_manager import SimulationManager
+from lifecycle.lifecycle_manager import LifecycleStage
+from visualization import (
     create_lifecycle_timeline,
     create_stage_distribution,
     create_genetic_timeline,
@@ -11,11 +12,8 @@ from healthcare_sim.visualization import (
 )
 
 def main():
-    st.set_page_config(
-        page_title="Healthcare Simulation",
-        page_icon="🏥",
-        layout="wide"
-    )
+    # Initialize Streamlit configuration
+    init_streamlit()
     
     st.title("Healthcare Lifecycle Simulation")
     

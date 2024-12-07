@@ -1,9 +1,9 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import random
-from healthcare_sim.intelligence.ai_integration import AIModelManager
-from healthcare_sim.lifecycle.lifecycle_manager import LifecycleManager, LifecycleStage, LifecycleEvent
-from healthcare_sim.config import (
+from intelligence.ai_integration import AIModelManager
+from lifecycle.lifecycle_manager import LifecycleManager, LifecycleStage, LifecycleEvent
+from config import (
     DEPARTMENTS,
     SIMULATION_STEP_DURATION,
     DEFAULT_EMERGENCY_FREQUENCY,
