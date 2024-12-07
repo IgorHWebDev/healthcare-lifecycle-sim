@@ -3,66 +3,50 @@ from datetime import datetime, timedelta
 import random
 from .intelligence.ai_integration import AIModelManager
 from .lifecycle.lifecycle_manager import LifecycleManager, LifecycleStage, LifecycleEvent
-from .config import (
-    DEPARTMENTS,
-    SIMULATION_STEP_DURATION,
-    DEFAULT_EMERGENCY_FREQUENCY,
-    DEFAULT_SIMULATION_DURATION,
-    DEFAULT_SIMULATION_SPEED
-)
+from .config import config
 
 class SimulationManager:
     def __init__(self):
         """Initialize simulation manager"""
-        self.current_time = datetime.now()
-        self.events = []
-        self.patients = {}
-        self.staff = {}
-        self.facility_layout = self._create_facility_layout()
         self.ai_manager = AIModelManager()
         self.lifecycle_manager = LifecycleManager(self.ai_manager)
-        
-        # Initialize with some test data
-        self._initialize_test_data()
-    
-    def _create_facility_layout(self) -> Dict:
-        """Create the initial facility layout"""
-        return {
+        self.current_time = datetime.now()
+        self.facility_layout = {
             "departments": {
-                "fertility_clinic": {
-                    "name": "Fertility Clinic",
-                    "locations": ["consultation", "lab", "storage", "procedure_room"],
-                    "capacity": 10,
+                "er": {
+                    "name": "Emergency Room",
+                    "capacity": config.DEPARTMENTS['ER']['capacity'],
+                    "staff": config.DEPARTMENTS['ER']['min_staff'],
                     "current_patients": 0,
-                    "staff": 5,
-                    "equipment": ["microscopes", "incubators", "cryostorage"]
+                    "equipment": config.DEPARTMENTS['ER']['equipment'],
+                    "locations": ["triage", "trauma", "general"]
                 },
-                "prenatal": {
-                    "name": "Prenatal Care",
-                    "locations": ["waiting_room", "exam_rooms", "ultrasound", "lab"],
-                    "capacity": 15,
+                "icu": {
+                    "name": "Intensive Care Unit",
+                    "capacity": config.DEPARTMENTS['ICU']['capacity'],
+                    "staff": config.DEPARTMENTS['ICU']['min_staff'],
                     "current_patients": 0,
-                    "staff": 8,
-                    "equipment": ["ultrasound_machines", "fetal_monitors"]
+                    "equipment": config.DEPARTMENTS['ICU']['equipment'],
+                    "locations": ["bed1", "bed2", "monitoring"]
                 },
-                "labor_delivery": {
-                    "name": "Labor & Delivery",
-                    "locations": ["triage", "delivery_rooms", "operating_room", "recovery"],
-                    "capacity": 12,
+                "ward": {
+                    "name": "General Ward",
+                    "capacity": config.DEPARTMENTS['WARD']['capacity'],
+                    "staff": config.DEPARTMENTS['WARD']['min_staff'],
                     "current_patients": 0,
-                    "staff": 10,
-                    "equipment": ["delivery_beds", "monitors", "emergency_equipment"]
+                    "equipment": config.DEPARTMENTS['WARD']['equipment'],
+                    "locations": ["room1", "room2", "nurses_station"]
                 }
             },
             "connections": [
-                ("fertility_clinic", "prenatal"),
-                ("prenatal", "labor_delivery")
+                ("er", "icu"),
+                ("icu", "ward"),
+                ("er", "ward")
             ]
         }
-    
-    def get_facility_layout(self) -> Dict:
-        """Get the facility layout"""
-        return self.facility_layout
+        
+        # Initialize with some test data
+        self._initialize_test_data()
     
     def _initialize_test_data(self):
         """Initialize simulation with test data"""
