@@ -1,18 +1,19 @@
 import streamlit as st
 from typing import Dict, List, Optional, Any, Union
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 
 # Try to import optional visualization dependencies
+VISUALIZATION_AVAILABLE = False
 try:
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
     import networkx as nx
     import seaborn as sns  # type: ignore
     VISUALIZATION_AVAILABLE = True
 except ImportError:
     print("Visualization packages not available. Using simplified visualization.")
-    VISUALIZATION_AVAILABLE = False
+    Figure = Any  # type: ignore
 
-def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[Figure]:
+def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[Any]:
     """Create a visualization of agent paths through the facility"""
     if not VISUALIZATION_AVAILABLE:
         st.warning("Advanced visualization not available. Please install networkx and matplotlib.")

@@ -1,7 +1,13 @@
 """Visualization module for healthcare simulation"""
 
 from typing import Dict, List, Optional, Any, Union
-from matplotlib.figure import Figure
+import streamlit as st
+
+# Define a type alias for Figure to avoid direct import
+try:
+    from matplotlib.figure import Figure
+except ImportError:
+    Figure = Any  # type: ignore
 
 # Import visualization functions with error handling
 try:
@@ -12,10 +18,9 @@ try:
         create_patient_statistics
     )
 except ImportError as e:
-    import streamlit as st
     print(f"Error importing visualization components: {e}")
     
-    def create_agent_path_visualization(*args: Any, **kwargs: Any) -> Optional[Figure]:
+    def create_agent_path_visualization(*args: Any, **kwargs: Any) -> Optional[Any]:
         st.warning("Visualization components not available")
         return None
     
@@ -38,15 +43,15 @@ try:
 except ImportError as e:
     print(f"Error importing lifecycle visualization components: {e}")
     
-    def create_lifecycle_timeline(*args: Any, **kwargs: Any) -> Optional[Figure]:
+    def create_lifecycle_timeline(*args: Any, **kwargs: Any) -> Optional[Any]:
         st.warning("Lifecycle visualization components not available")
         return None
     
-    def create_stage_distribution(*args: Any, **kwargs: Any) -> Optional[Figure]:
+    def create_stage_distribution(*args: Any, **kwargs: Any) -> Optional[Any]:
         st.warning("Lifecycle visualization components not available")
         return None
     
-    def create_genetic_timeline(*args: Any, **kwargs: Any) -> Optional[Figure]:
+    def create_genetic_timeline(*args: Any, **kwargs: Any) -> Optional[Any]:
         st.warning("Lifecycle visualization components not available")
         return None
     
