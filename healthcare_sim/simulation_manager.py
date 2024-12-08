@@ -48,142 +48,76 @@ class SimulationManager:
         # Initialize with some test data
         self._initialize_test_data()
     
+    def get_facility_layout(self) -> Dict:
+        """Get the current facility layout"""
+        return self.facility_layout
+    
     def _initialize_test_data(self):
         """Initialize simulation with test data"""
-        # Create some genetic materials
-        egg_id = self.lifecycle_manager.register_genetic_material(
-            material_type="egg",
-            donor_id="donor_123",
-            genetic_markers={"marker1": "test"}
-        )
+        # Add some test events
+        self.events = []
         
-        sperm_id = self.lifecycle_manager.register_genetic_material(
-            material_type="sperm",
-            donor_id="donor_456",
-            genetic_markers={"marker1": "test"}
-        )
-        
-        # Create conception event
-        self.lifecycle_manager.create_lifecycle_event(
-            patient_id="patient_789",
-            stage=LifecycleStage.CONCEPTION,
-            description=f"IVF conception using egg {egg_id} and sperm {sperm_id}",
-            location="Fertility Clinic A",
-            providers=["Dr. Smith"],
-            genetic_data={
-                "egg_id": egg_id,
-                "sperm_id": sperm_id
+        # Add some test patients
+        self.patients = {
+            "P001": {
+                "id": "P001",
+                "location": "er",
+                "condition": "stable",
+                "admission_time": datetime.now() - timedelta(hours=2)
+            },
+            "P002": {
+                "id": "P002",
+                "location": "icu",
+                "condition": "critical",
+                "admission_time": datetime.now() - timedelta(hours=5)
             }
-        )
+        }
+        
+        # Update department counts
+        for patient in self.patients.values():
+            dept = patient["location"]
+            if dept in self.facility_layout["departments"]:
+                self.facility_layout["departments"][dept]["current_patients"] += 1
     
-    def update(self, time_delta: timedelta = timedelta(minutes=1), auto_events: bool = True, risk_level: str = "normal"):
+    def update(self, time_delta: timedelta) -> None:
         """Update simulation state"""
         self.current_time += time_delta
         
-        if auto_events:
-            self._generate_random_events(risk_level)
-        
-        self._update_lifecycle_events(risk_level)
-        self._update_department_stats()
+        # Update patient states
+        for patient_id, patient in self.patients.items():
+            if random.random() < 0.1:  # 10% chance of state change
+                if patient["condition"] == "critical" and random.random() < 0.3:
+                    patient["condition"] = "stable"
+                    self._move_patient(patient_id, "icu", "ward")
+                elif patient["condition"] == "stable" and random.random() < 0.1:
+                    patient["condition"] = "critical"
+                    self._move_patient(patient_id, "ward", "icu")
     
-    def _generate_random_events(self, risk_level: str):
-        """Generate random events based on risk level"""
-        # Adjust probabilities based on risk level
-        event_probability = {
-            "low": 0.1,
-            "normal": 0.3,
-            "high": 0.5
-        }.get(risk_level, 0.3)
-        
-        if random.random() < event_probability:
-            # Generate a random event
-            stage = random.choice(list(LifecycleStage))
-            department = random.choice(list(self.facility_layout["departments"].keys()))
-            dept_info = self.facility_layout["departments"][department]
-            
-            event_descriptions = {
-                LifecycleStage.PRE_CONCEPTION: [
-                    "Initial fertility consultation",
-                    "Genetic screening",
-                    "Donor material evaluation"
-                ],
-                LifecycleStage.CONCEPTION: [
-                    "IVF procedure",
-                    "Embryo transfer",
-                    "Fertilization confirmation"
-                ],
-                LifecycleStage.PRENATAL: [
-                    "Routine checkup",
-                    "Ultrasound scan",
-                    "Blood work analysis"
-                ],
-                LifecycleStage.BIRTH: [
-                    "Labor onset",
-                    "Delivery preparation",
-                    "Emergency C-section"
-                ],
-                LifecycleStage.NEONATAL: [
-                    "Newborn examination",
-                    "Feeding session",
-                    "Vital signs check"
-                ]
-            }
-            
-            description = random.choice(event_descriptions.get(stage, ["Routine check"]))
-            location = random.choice(dept_info["locations"])
-            
-            self.lifecycle_manager.create_lifecycle_event(
-                patient_id=f"patient_{random.randint(1, 999)}",
-                stage=stage,
-                description=description,
-                location=f"{dept_info['name']} - {location}",
-                providers=[f"Dr. Staff_{random.randint(1, dept_info['staff'])}"],
-                biometric_data={
-                    "heart_rate": random.randint(60, 100),
-                    "blood_pressure": f"{random.randint(110, 140)}/{random.randint(60, 90)}"
-                }
-            )
+    def _move_patient(self, patient_id: str, from_dept: str, to_dept: str) -> None:
+        """Move a patient between departments"""
+        if (from_dept in self.facility_layout["departments"] and 
+            to_dept in self.facility_layout["departments"]):
+            self.facility_layout["departments"][from_dept]["current_patients"] -= 1
+            self.facility_layout["departments"][to_dept]["current_patients"] += 1
+            self.patients[patient_id]["location"] = to_dept
     
-    def _update_lifecycle_events(self, risk_level: str):
-        """Update lifecycle events based on current time and risk level"""
-        # Update existing events based on risk level
-        complication_probability = {
-            "low": 0.05,
-            "normal": 0.15,
-            "high": 0.30
-        }.get(risk_level, 0.15)
-        
-        for patient_id, events in self.lifecycle_manager.lifecycle_events.items():
-            if events and random.random() < complication_probability:
-                # Add a complication event
-                latest_event = max(events, key=lambda e: e.timestamp)
-                
-                complication_descriptions = {
-                    LifecycleStage.PRE_CONCEPTION: "Quality control issue detected",
-                    LifecycleStage.CONCEPTION: "Fertilization complications",
-                    LifecycleStage.PRENATAL: "Abnormal test results",
-                    LifecycleStage.BIRTH: "Delivery complications",
-                    LifecycleStage.NEONATAL: "Neonatal distress"
-                }
-                
-                self.lifecycle_manager.create_lifecycle_event(
-                    patient_id=patient_id,
-                    stage=latest_event.stage,
-                    description=f"ALERT: {complication_descriptions.get(latest_event.stage, 'Complication detected')}",
-                    location=latest_event.location,
-                    providers=latest_event.providers,
-                    biometric_data={
-                        "alert_level": "high",
-                        "requires_attention": True
-                    }
-                )
-    
-    def _update_department_stats(self):
-        """Update department statistics"""
+    def get_department_stats(self) -> Dict[str, Dict]:
+        """Get statistics for each department"""
+        stats = {}
         for dept_id, dept in self.facility_layout["departments"].items():
-            # Randomly update current patients
-            dept["current_patients"] = min(
-                dept["capacity"],
-                max(0, dept["current_patients"] + random.randint(-1, 1))
-            )
+            stats[dept_id] = {
+                "name": dept["name"],
+                "occupancy_rate": dept["current_patients"] / dept["capacity"],
+                "staff_ratio": dept["staff"] / dept["capacity"],
+                "equipment": len(dept["equipment"])
+            }
+        return stats
+    
+    def get_patient_stats(self) -> Dict[str, int]:
+        """Get patient statistics"""
+        conditions = {}
+        for patient in self.patients.values():
+            condition = patient["condition"]
+            conditions[condition] = conditions.get(condition, 0) + 1
+        return conditions
     
