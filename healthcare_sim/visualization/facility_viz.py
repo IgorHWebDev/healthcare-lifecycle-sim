@@ -1,17 +1,19 @@
 import streamlit as st
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, Union
 
 # Try to import visualization dependencies
 try:
     import networkx as nx
     import matplotlib.pyplot as plt
     import seaborn as sns
+    Figure = plt.Figure  # For type hints
     VISUALIZATION_AVAILABLE = True
 except ImportError:
     print("Visualization packages not available. Using simplified visualization.")
     VISUALIZATION_AVAILABLE = False
+    Figure = Any  # Fallback type hint
 
-def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[plt.Figure]:
+def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[Union[Figure, None]]:
     """Create a visualization of agent paths through the facility"""
     if not VISUALIZATION_AVAILABLE:
         st.warning("Advanced visualization not available. Please install networkx and matplotlib.")
@@ -90,7 +92,7 @@ def create_patient_statistics(patient_data: List[Dict]) -> None:
     try:
         # Basic statistics
         total_patients = len(patient_data)
-        avg_stay = sum(p.get("stay_duration", 0) for p in patient_data) / total_patients
+        avg_stay = sum(p.get("stay_duration", 0) for p in patient_data) / total_patients if total_patients > 0 else 0
         
         # Display metrics
         col1, col2, col3 = st.columns(3)

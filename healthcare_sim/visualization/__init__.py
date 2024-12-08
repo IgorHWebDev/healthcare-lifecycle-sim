@@ -1,27 +1,64 @@
-from .lifecycle_viz import (
-    create_lifecycle_timeline,
-    create_stage_distribution,
-    create_genetic_timeline,
-    display_lifecycle_dashboard
-)
+"""Visualization module for healthcare simulation"""
 
-from .facility_viz import (
-    create_agent_path_visualization,
-    create_agent_status_cards,
-    create_event_frequency_charts,
-    create_patient_statistics
-)
+from typing import Dict, List, Optional, Any
+
+# Import visualization functions with error handling
+try:
+    from .facility_viz import (
+        create_agent_path_visualization,
+        create_agent_status_cards,
+        create_event_frequency_charts,
+        create_patient_statistics
+    )
+except ImportError as e:
+    import streamlit as st
+    print(f"Error importing visualization components: {e}")
+    
+    def create_agent_path_visualization(*args, **kwargs):
+        st.warning("Visualization components not available")
+        return None
+    
+    def create_agent_status_cards(*args, **kwargs):
+        st.warning("Visualization components not available")
+    
+    def create_event_frequency_charts(*args, **kwargs):
+        st.warning("Visualization components not available")
+    
+    def create_patient_statistics(*args, **kwargs):
+        st.warning("Visualization components not available")
+
+try:
+    from .lifecycle_viz import (
+        create_lifecycle_timeline,
+        create_stage_distribution,
+        create_genetic_timeline,
+        display_lifecycle_dashboard
+    )
+except ImportError as e:
+    print(f"Error importing lifecycle visualization components: {e}")
+    
+    def create_lifecycle_timeline(*args, **kwargs):
+        st.warning("Lifecycle visualization components not available")
+        return None
+    
+    def create_stage_distribution(*args, **kwargs):
+        st.warning("Lifecycle visualization components not available")
+        return None
+    
+    def create_genetic_timeline(*args, **kwargs):
+        st.warning("Lifecycle visualization components not available")
+        return None
+    
+    def display_lifecycle_dashboard(*args, **kwargs):
+        st.warning("Lifecycle visualization components not available")
 
 __all__ = [
-    # Lifecycle visualizations
-    'create_lifecycle_timeline',
-    'create_stage_distribution',
-    'create_genetic_timeline',
-    'display_lifecycle_dashboard',
-    
-    # Facility visualizations
     'create_agent_path_visualization',
     'create_agent_status_cards',
     'create_event_frequency_charts',
-    'create_patient_statistics'
+    'create_patient_statistics',
+    'create_lifecycle_timeline',
+    'create_stage_distribution',
+    'create_genetic_timeline',
+    'display_lifecycle_dashboard'
 ] 
