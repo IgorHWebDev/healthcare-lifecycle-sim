@@ -1,19 +1,18 @@
 import streamlit as st
 from typing import Dict, List, Optional, Any, Union
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
-# Try to import visualization dependencies
+# Try to import optional visualization dependencies
 try:
     import networkx as nx
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    Figure = plt.Figure  # For type hints
+    import seaborn as sns  # type: ignore
     VISUALIZATION_AVAILABLE = True
 except ImportError:
     print("Visualization packages not available. Using simplified visualization.")
     VISUALIZATION_AVAILABLE = False
-    Figure = Any  # Fallback type hint
 
-def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[Union[Figure, None]]:
+def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Optional[Figure]:
     """Create a visualization of agent paths through the facility"""
     if not VISUALIZATION_AVAILABLE:
         st.warning("Advanced visualization not available. Please install networkx and matplotlib.")
@@ -43,7 +42,7 @@ def create_agent_path_visualization(agent_paths: Dict[str, List[str]]) -> Option
         st.error(f"Error creating path visualization: {e}")
         return None
 
-def create_agent_status_cards(agents_data: Dict[str, Dict]) -> None:
+def create_agent_status_cards(agents_data: Dict[str, Dict[str, Any]]) -> None:
     """Create status cards for agents"""
     if not agents_data:
         st.info("No agent data available")
@@ -57,7 +56,7 @@ def create_agent_status_cards(agents_data: Dict[str, Dict]) -> None:
             st.metric("Status", data.get("status", "Unknown"))
             st.progress(1 - float(data.get("fatigue", 0)))
 
-def create_event_frequency_charts(events: List[Dict]) -> None:
+def create_event_frequency_charts(events: List[Dict[str, Any]]) -> None:
     """Create charts showing event frequencies"""
     if not events:
         st.info("No event data available")
@@ -83,7 +82,7 @@ def create_event_frequency_charts(events: List[Dict]) -> None:
     except Exception as e:
         st.error(f"Error creating event charts: {e}")
 
-def create_patient_statistics(patient_data: List[Dict]) -> None:
+def create_patient_statistics(patient_data: List[Dict[str, Any]]) -> None:
     """Create patient statistics visualization"""
     if not patient_data:
         st.info("No patient data available")

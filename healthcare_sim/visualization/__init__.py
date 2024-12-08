@@ -1,6 +1,7 @@
 """Visualization module for healthcare simulation"""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
+from matplotlib.figure import Figure
 
 # Import visualization functions with error handling
 try:
@@ -14,17 +15,17 @@ except ImportError as e:
     import streamlit as st
     print(f"Error importing visualization components: {e}")
     
-    def create_agent_path_visualization(*args, **kwargs):
+    def create_agent_path_visualization(*args: Any, **kwargs: Any) -> Optional[Figure]:
         st.warning("Visualization components not available")
         return None
     
-    def create_agent_status_cards(*args, **kwargs):
+    def create_agent_status_cards(*args: Any, **kwargs: Any) -> None:
         st.warning("Visualization components not available")
     
-    def create_event_frequency_charts(*args, **kwargs):
+    def create_event_frequency_charts(*args: Any, **kwargs: Any) -> None:
         st.warning("Visualization components not available")
     
-    def create_patient_statistics(*args, **kwargs):
+    def create_patient_statistics(*args: Any, **kwargs: Any) -> None:
         st.warning("Visualization components not available")
 
 try:
@@ -37,19 +38,19 @@ try:
 except ImportError as e:
     print(f"Error importing lifecycle visualization components: {e}")
     
-    def create_lifecycle_timeline(*args, **kwargs):
+    def create_lifecycle_timeline(*args: Any, **kwargs: Any) -> Optional[Figure]:
         st.warning("Lifecycle visualization components not available")
         return None
     
-    def create_stage_distribution(*args, **kwargs):
+    def create_stage_distribution(*args: Any, **kwargs: Any) -> Optional[Figure]:
         st.warning("Lifecycle visualization components not available")
         return None
     
-    def create_genetic_timeline(*args, **kwargs):
+    def create_genetic_timeline(*args: Any, **kwargs: Any) -> Optional[Figure]:
         st.warning("Lifecycle visualization components not available")
         return None
     
-    def display_lifecycle_dashboard(*args, **kwargs):
+    def display_lifecycle_dashboard(*args: Any, **kwargs: Any) -> None:
         st.warning("Lifecycle visualization components not available")
 
 __all__ = [
