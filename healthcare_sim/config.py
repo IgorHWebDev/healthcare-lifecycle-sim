@@ -37,6 +37,24 @@ class Config:
         # OpenAI Configuration
         self.OPENAI_API_KEY = self._get_secret("openai", "api_key")
         
+        # RunPod Configuration
+        self.RUNPOD_API_KEY = self._get_secret("runpod", "api_key")
+        self.RUNPOD_ENDPOINT_ID = self._get_secret("runpod", "endpoint_id", "rae27bwesqoyty")
+        self.RUNPOD_ENDPOINT_URL = self._get_secret(
+            "runpod", "endpoint_url", 
+            f"https://{self.RUNPOD_ENDPOINT_ID}-8000.proxy.runpod.net"
+        )
+        self.RUNPOD_MODEL_NAME = self._get_secret(
+            "runpod", "model_name", 
+            "meta-llama-3.1-70b-instruct-awq-int4"
+        )
+        
+        # vLLM Settings
+        self.VLLM_MAX_TOKENS = int(self._get_secret("runpod", "max_total_tokens", 4096))
+        self.VLLM_TEMPERATURE = float(self._get_secret("runpod", "temperature", 0.7))
+        self.VLLM_TOP_P = float(self._get_secret("runpod", "top_p", 0.9))
+        self.VLLM_MAX_CONCURRENT = int(self._get_secret("runpod", "max_concurrent_requests", 2))
+        
         # Database Configuration
         self.MIMIC_DATABASE_PATH = self._get_secret(
             "database", "mimic_path", 
@@ -84,6 +102,11 @@ class Config:
         self.FATIGUE_INCREASE_RATE = 0.1
         self.REST_RECOVERY_RATE = 0.2
         self.EMERGENCY_PROBABILITY = 0.05
+        
+        # RunPod Hardware Monitoring
+        self.GPU_MEMORY_THRESHOLD = float(self._get_secret("runpod.monitoring", "gpu_memory_threshold", 0.9))
+        self.CPU_THRESHOLD = float(self._get_secret("runpod.monitoring", "cpu_threshold", 0.8))
+        self.MEMORY_THRESHOLD = float(self._get_secret("runpod.monitoring", "memory_threshold", 0.8))
 
 # Create a global config instance
 config = Config()

@@ -262,3 +262,150 @@ class PatientDataLoader:
             emergency_cases.append(patient_info)
         
         return emergency_cases
+
+class MIMICDataLoader:
+    def __init__(self, mimic_path: str):
+        """Initialize MIMIC data loader with path to MIMIC-IV database"""
+        self.mimic_path = mimic_path
+        self.patients_df = None
+        self.admissions_df = None
+        self.diagnoses_df = None
+        self.load_data()
+    
+    def load_data(self):
+        """Load required MIMIC-IV tables"""
+        try:
+            print("Loading MIMIC tables...")
+            
+            # Load core patient data from core module
+            patients_path = os.path.join(self.mimic_path, "core", "patients.csv")
+            print(f"Loading patients from: {patients_path}")
+            self.patients_df = pd.read_csv(patients_path)
+            print(f"Loaded {len(self.patients_df)} patients")
+            
+            # Load hospital admissions from hosp module
+            admissions_path = os.path.join(self.mimic_path, "hosp", "admissions.csv")
+            print(f"Loading admissions from: {admissions_path}")
+            self.admissions_df = pd.read_csv(admissions_path)
+            print(f"Loaded {len(self.admissions_df)} admissions")
+            
+            # Load diagnoses from hosp module
+            diagnoses_path = os.path.join(self.mimic_path, "hosp", "diagnoses_icd.csv")
+            print(f"Loading diagnoses from: {diagnoses_path}")
+            self.diagnoses_df = pd.read_csv(diagnoses_path)
+            print(f"Loaded {len(self.diagnoses_df)} diagnoses")
+            
+            print("Successfully loaded all MIMIC tables")
+            
+        except Exception as e:
+            print(f"Error loading MIMIC data: {str(e)}")
+            raise RuntimeError(f"Error loading MIMIC data: {str(e)}")
+    
+    def get_random_patients(self, n: int = 10) -> List[Dict]:
+        """Get n random patients with their admission and diagnosis data"""
+        if self.patients_df is None or self.admissions_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        # Get random sample of patients
+        random_patients = self.patients_df.sample(n=n)
+        patient_data = []
+        
+        for _, patient in random_patients.iterrows():
+            # Get patient's admissions
+            patient_admissions = self.admissions_df[
+                self.admissions_df['subject_id'] == patient['subject_id']
+            ]
+            
+            if len(patient_admissions) > 0:
+                # Get latest admission
+                latest_admission = patient_admissions.iloc[0]
+                
+                # Get diagnoses for this admission
+                diagnoses = self.diagnoses_df[
+                    (self.diagnoses_df['subject_id'] == patient['subject_id']) &
+                    (self.diagnoses_df['hadm_id'] == latest_admission['hadm_id'])
+                ]
+                
+                patient_data.append({
+                    'patient_id': str(patient['subject_id']),
+                    'gender': patient['gender'],
+                    'age': patient.get('anchor_age', 0),
+                    'admission_type': latest_admission['admission_type'],
+                    'admission_location': latest_admission['admission_location'],
+                    'discharge_location': latest_admission['discharge_location'],
+                    'length_of_stay': latest_admission.get('los', 0),
+                    'diagnoses': diagnoses['icd_code'].tolist() if len(diagnoses) > 0 else []
+                })
+        
+        return patient_data
+    
+    def get_admission_location_stats(self) -> Dict[str, int]:
+        """Get statistics about admission locations"""
+        if self.admissions_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        return self.admissions_df['admission_location'].value_counts().to_dict()
+    
+    def get_admission_type_stats(self) -> Dict[str, int]:
+        """Get statistics about admission types"""
+        if self.admissions_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        return self.admissions_df['admission_type'].value_counts().to_dict()
+    
+    def get_length_of_stay_stats(self) -> Dict[str, float]:
+        """Get statistics about length of stay"""
+        if self.admissions_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        los_stats = self.admissions_df['los'].describe()
+        return {
+            'mean': los_stats['mean'],
+            'median': los_stats['50%'],
+            'min': los_stats['min'],
+            'max': los_stats['max']
+        }
+    
+    def get_diagnoses_frequency(self, top_n: int = 10) -> Dict[str, int]:
+        """Get the most common diagnoses"""
+        if self.diagnoses_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        return self.diagnoses_df['icd_code'].value_counts().head(top_n).to_dict()
+    
+    def get_patient_details(self, patient_id: str) -> Optional[Dict]:
+        """Get detailed information for a specific patient"""
+        if self.patients_df is None or self.admissions_df is None:
+            raise RuntimeError("Data not loaded. Call load_data() first.")
+        
+        # Get patient data
+        patient = self.patients_df[self.patients_df['subject_id'] == int(patient_id)]
+        if len(patient) == 0:
+            return None
+        
+        # Get patient's admissions
+        admissions = self.admissions_df[
+            self.admissions_df['subject_id'] == int(patient_id)
+        ]
+        
+        # Get patient's diagnoses
+        diagnoses = self.diagnoses_df[
+            self.diagnoses_df['subject_id'] == int(patient_id)
+        ]
+        
+        return {
+            'patient_id': str(patient_id),
+            'gender': patient.iloc[0]['gender'],
+            'age': patient.iloc[0].get('anchor_age', 0),
+            'admissions': [
+                {
+                    'admission_id': str(row['hadm_id']),
+                    'admission_type': row['admission_type'],
+                    'admission_location': row['admission_location'],
+                    'discharge_location': row['discharge_location'],
+                    'length_of_stay': row.get('los', 0)
+                }
+                for _, row in admissions.iterrows()
+            ],
+            'diagnoses': diagnoses['icd_code'].tolist()
+        }

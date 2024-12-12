@@ -1,237 +1,304 @@
 import streamlit as st
-import os
-import time
-import plotly.graph_objects as go
+import pandas as pd
 from datetime import datetime, timedelta
 import random
-from typing import Dict
-from healthcare_sim.simulation_manager import SimulationManager
-from healthcare_sim.visualization import (
-    create_lifecycle_timeline,
-    create_stage_distribution,
-    create_genetic_timeline,
-    display_lifecycle_dashboard,
-    create_agent_path_visualization
-)
-from healthcare_sim.lifecycle.lifecycle_manager import LifecycleStage
-
-def format_duration(td: timedelta) -> str:
-    """Format timedelta into a readable string."""
-    minutes = td.total_seconds() / 60
-    return f"{minutes}m"
+from typing import Dict, List
+from simulation_manager import SimulationManager
+from lifecycle.lifecycle_manager import LifecycleStage
 
 def reset_simulation():
     """Reset the simulation state."""
     if 'simulation' not in st.session_state:
         st.session_state.simulation = SimulationManager()
-        st.session_state.events = st.session_state.simulation.lifecycle_manager.get_patient_timeline("patient_789")
+        
+        # Add some initial patients
+        sim = st.session_state.simulation
+        
+        # Admit some initial patients
+        initial_patients = [
+            ("ER001", "er", "Under Observation"),
+            ("ICU001", "icu", "Critical"),
+            ("WARD001", "ward", "Stable"),
+            ("WARD002", "ward", "Improving")
+        ]
+        
+        for patient_id, dept, status in initial_patients:
+            sim.db.admit_patient(patient_id, dept, status)
+            
+            # Generate initial event for each patient
+            sim._generate_patient_event({
+                "patient_id": patient_id,
+                "department_name": sim.db.departments[dept]["name"],
+                "status": status
+            })
+        
+        st.session_state.events = []
         st.session_state.start_time = datetime.now()
         st.session_state.is_running = False
-        st.session_state.is_paused = False
-        st.session_state.agent_paths = {}
+        st.session_state.simulation_speed = 1.0
+        st.session_state.last_update = datetime.now()
 
-def display_facility_layout():
-    """Display facility layout in a more visual way."""
-    layout = st.session_state.simulation.get_facility_layout()
+def update_simulation():
+    """Update simulation state if running."""
+    if st.session_state.is_running:
+        current_time = datetime.now()
+        elapsed = current_time - st.session_state.last_update
+        scaled_elapsed = elapsed * st.session_state.simulation_speed
+        st.session_state.simulation.update(scaled_elapsed)
+        st.session_state.last_update = current_time
+
+def display_hospital_overview():
+    """Display hospital departments and their current status with detailed metrics."""
+    st.subheader("🏥 Hospital Overview")
     
-    # Display departments as columns
-    cols = st.columns(len(layout["departments"]))
-    for col, (dept_id, dept) in zip(cols, layout["departments"].items()):
+    # Get department statistics
+    departments = st.session_state.simulation.db.get_department_stats()
+    
+    # Summary metrics
+    total_patients = sum(dept["current_occupancy"] for dept in departments)
+    total_capacity = sum(dept["capacity"] for dept in departments)
+    overall_occupancy = (total_patients / total_capacity * 100) if total_capacity > 0 else 0
+    
+    # Overall hospital metrics
+    st.markdown("### Hospital Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            "Total Patients",
+            f"{total_patients}/{total_capacity}",
+            f"{overall_occupancy:.1f}% Occupied"
+        )
+    with col2:
+        critical_count = len([p for p in st.session_state.simulation.db.get_active_patients() 
+                            if p["status"] == "Critical"])
+        st.metric("Critical Patients", critical_count)
+    with col3:
+        available_beds = total_capacity - total_patients
+        st.metric("Available Beds", available_beds)
+    
+    # Department details
+    st.markdown("### Department Status")
+    
+    # Create columns for departments
+    cols = st.columns(len(departments))
+    for col, dept in zip(cols, departments):
         with col:
-            st.markdown(f"### {dept['name']}")
-            for loc in dept['locations']:
-                st.markdown(f"- 📍 {loc}")
-    
-    # Display connections
-    st.markdown("### Department Connections")
-    for conn in layout["connections"]:
-        st.markdown(f"🔄 {conn[0]} ↔️ {conn[1]}")
-
-def display_stage_specific_interface(stage: LifecycleStage, lifecycle_manager):
-    """Display interface specific to the selected lifecycle stage."""
-    if stage == LifecycleStage.PRE_CONCEPTION:
-        st.subheader("Pre-conception Stage")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            with st.form("genetic_material"):
-                material_type = st.selectbox("Material Type", ["egg", "sperm"])
-                donor_id = st.text_input("Donor ID")
-                if st.form_submit_button("Register Material"):
-                    try:
-                        material_id = lifecycle_manager.register_genetic_material(
-                            material_type=material_type,
-                            donor_id=donor_id,
-                            genetic_markers={"marker1": "test"}
-                        )
-                        st.success(f"Registered {material_type} with ID: {material_id}")
-                    except Exception as e:
-                        st.error(f"Error registering material: {str(e)}")
-        
-        with col2:
-            st.markdown("### Registered Materials")
-            for material_id, material in lifecycle_manager.genetic_materials.items():
-                st.markdown(f"""
-                - **{material.material_type.title()}** (ID: {material_id})
-                  - Donor: {material.donor_id or 'Anonymous'}
-                  - Collected: {material.collection_date.strftime('%Y-%m-%d %H:%M')}
-                """)
-    
-    elif stage == LifecycleStage.CONCEPTION:
-        st.subheader("Conception Stage")
-        with st.form("conception_event"):
-            col1, col2 = st.columns(2)
-            with col1:
-                egg_materials = {k: v for k, v in lifecycle_manager.genetic_materials.items() 
-                               if v.material_type == "egg"}
-                sperm_materials = {k: v for k, v in lifecycle_manager.genetic_materials.items() 
-                                 if v.material_type == "sperm"}
-                
-                egg_id = st.selectbox("Select Egg", options=list(egg_materials.keys()))
-                sperm_id = st.selectbox("Select Sperm", options=list(sperm_materials.keys()))
+            occupancy_pct = (dept["current_occupancy"] / dept["capacity"]) * 100
             
-            with col2:
-                location = st.text_input("Location")
-                providers = st.text_input("Healthcare Providers (comma-separated)")
-            
-            if st.form_submit_button("Create Conception Event"):
-                try:
-                    event_id = lifecycle_manager.create_lifecycle_event(
-                        patient_id="patient_789",
-                        stage=stage,
-                        description=f"IVF conception using egg {egg_id} and sperm {sperm_id}",
-                        location=location,
-                        providers=providers.split(",") if providers else ["Unknown"],
-                        genetic_data={
-                            "egg_id": egg_id,
-                            "sperm_id": sperm_id
-                        }
-                    )
-                    st.session_state.events = lifecycle_manager.get_patient_timeline("patient_789")
-                    st.success(f"Created conception event with ID: {event_id}")
-                except Exception as e:
-                    st.error(f"Error creating event: {str(e)}")
-    
-    else:
-        st.subheader(f"{stage.name} Stage")
-        with st.form("create_event"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                description = st.text_area("Event Description")
-                location = st.text_input("Location")
-            
-            with col2:
-                providers = st.text_input("Healthcare Providers (comma-separated)")
-                include_biometrics = st.checkbox("Include Biometric Data")
-            
-            if include_biometrics:
-                st.markdown("### Biometric Data")
-                bio_col1, bio_col2 = st.columns(2)
-                with bio_col1:
-                    height = st.number_input("Height (cm)", min_value=0.0)
-                    weight = st.number_input("Weight (kg)", min_value=0.0)
-                with bio_col2:
-                    blood_pressure = st.text_input("Blood Pressure (e.g., 120/80)")
-                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=0)
-            
-            if st.form_submit_button("Create Event"):
-                try:
-                    biometric_data = None
-                    if include_biometrics:
-                        biometric_data = {
-                            "height_cm": height,
-                            "weight_kg": weight,
-                            "blood_pressure": blood_pressure,
-                            "heart_rate_bpm": heart_rate
-                        }
-                    
-                    event_id = lifecycle_manager.create_lifecycle_event(
-                        patient_id="patient_789",
-                        stage=stage,
-                        description=description,
-                        location=location,
-                        providers=providers.split(",") if providers else ["Unknown"],
-                        biometric_data=biometric_data
-                    )
-                    st.session_state.events = lifecycle_manager.get_patient_timeline("patient_789")
-                    st.success(f"Created event with ID: {event_id}")
-                except Exception as e:
-                    st.error(f"Error creating event: {str(e)}")
-
-def display_interface():
-    """Display the main simulation interface."""
-    st.title("Healthcare Lifecycle Simulation")
-    
-    # Main content area
-    tab1, tab2, tab3 = st.tabs([
-        "Activity Timeline",
-        "Facility Layout",
-        "🧬 Lifecycle Management"
-    ])
-    
-    with tab1:
-        st.header("Activity Timeline")
-        if not st.session_state.events:
-            st.info("No events recorded yet. Use the Lifecycle Management tab to create events.")
-        else:
-            try:
-                timeline = create_lifecycle_timeline(st.session_state.events)
-                if timeline:
-                    st.plotly_chart(timeline, use_container_width=True)
-                    
-                # Show event distribution
-                distribution = create_stage_distribution(st.session_state.events)
-                if distribution:
-                    st.plotly_chart(distribution, use_container_width=True)
-                    
-                # Show event details
-                st.subheader("Event Details")
-                for event in sorted(st.session_state.events, key=lambda e: e.timestamp, reverse=True):
-                    with st.expander(f"{event.stage.name} - {event.timestamp.strftime('%Y-%m-%d %H:%M')}"):
-                        st.markdown(f"""
-                        **Description:** {event.description}
-                        **Location:** {event.location}
-                        **Providers:** {', '.join(event.providers)}
-                        """)
-                        
-                        if event.biometric_data:
-                            st.markdown("**Biometric Data:**")
-                            for key, value in event.biometric_data.items():
-                                st.markdown(f"- {key}: {value}")
-                        
-                        if event.genetic_data:
-                            st.markdown("**Genetic Data:**")
-                            for key, value in event.genetic_data.items():
-                                st.markdown(f"- {key}: {value}")
-            except Exception as e:
-                st.error(f"Error creating timeline: {str(e)}")
-    
-    with tab2:
-        st.header("Facility Layout")
-        display_facility_layout()
-    
-    with tab3:
-        st.header("🧬 Lifecycle Management")
-        try:
-            # Get lifecycle manager
-            lifecycle_manager = st.session_state.simulation.lifecycle_manager
-            
-            # Lifecycle stage selector
-            stage = st.selectbox(
-                "Select Lifecycle Stage",
-                options=list(LifecycleStage)
+            # Department metrics
+            st.markdown(f"#### {dept['name']}")
+            st.metric(
+                "Occupancy",
+                f"{dept['current_occupancy']}/{dept['capacity']}",
+                f"{occupancy_pct:.1f}% Occupied",
+                delta_color="inverse"
             )
             
-            # Display stage-specific interface
-            display_stage_specific_interface(stage, lifecycle_manager)
+            # Visual capacity indicator
+            st.progress(occupancy_pct/100, text=f"{occupancy_pct:.1f}%")
+            
+            # Department patients
+            patients = [p for p in st.session_state.simulation.db.get_active_patients() 
+                       if p["department_name"] == dept["name"]]
+            
+            if patients:
+                with st.expander("View Patients"):
+                    for p in patients:
+                        st.markdown(f"• {p['patient_id']} ({p['status']})")
+
+def display_patient_monitor():
+    """Display active patients and their status with interactive controls."""
+    st.subheader("👥 Patient Monitor")
+    
+    patients = st.session_state.simulation.db.get_active_patients()
+    if not patients:
+        st.info("No active patients in the hospital")
+        return
+    
+    # Add new patient button
+    with st.expander("➕ Admit New Patient"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_patient_id = st.text_input("Patient ID", value=f"P{len(patients)+1:03d}")
+            department = st.selectbox(
+                "Initial Department",
+                options=["Emergency Room", "General Ward"],
+                index=0
+            )
+        with col2:
+            initial_status = st.selectbox(
+                "Initial Status",
+                options=["Stable", "Under Observation", "Critical"],
+                index=1
+            )
+            if st.button("Admit Patient"):
+                dept_id = next(
+                    (k for k, v in st.session_state.simulation.db.departments.items() 
+                     if v["name"] == department),
+                    "er"
+                )
+                if st.session_state.simulation.db.admit_patient(new_patient_id, dept_id, initial_status):
+                    st.success(f"Patient {new_patient_id} admitted to {department}")
+                else:
+                    st.error(f"Could not admit patient - {department} is full")
+    
+    # Display active patients
+    st.markdown("### Active Patients")
+    
+    # Create patient table
+    patient_table = []
+    for p in patients:
+        patient_table.append({
+            "ID": p["patient_id"],
+            "Location": p["department_name"],
+            "Status": p["status"]
+        })
+    
+    if patient_table:
+        st.table(pd.DataFrame(patient_table))
+    
+    # Display detailed patient cards
+    for patient in patients:
+        with st.expander(f"Patient {patient['patient_id']} - {patient['status']}"):
+            col1, col2, col3 = st.columns([2,2,1])
+            
+            with col1:
+                st.markdown(f"**Location:** {patient['department_name']}")
+                st.markdown(f"**Status:** {patient['status']}")
                 
-        except Exception as e:
-            st.error(f"Error in lifecycle management: {str(e)}")
+                # Get vital signs
+                vitals = st.session_state.simulation.db.vital_signs.get(patient['patient_id'], [])
+                if vitals:
+                    latest_vitals = vitals[-1]['data']
+                    st.markdown("**Latest Vitals:**")
+                    for key, value in latest_vitals.items():
+                        st.text(f"  • {key}: {value}")
+            
+            with col2:
+                # Patient actions
+                new_status = st.selectbox(
+                    "Update Status",
+                    options=["Stable", "Critical", "Improving", "Under Observation", "Ready for Discharge"],
+                    key=f"status_{patient['patient_id']}"
+                )
+                
+                new_dept = st.selectbox(
+                    "Transfer to Department",
+                    options=[d["name"] for d in st.session_state.simulation.db.get_department_stats()],
+                    key=f"dept_{patient['patient_id']}"
+                )
+            
+            with col3:
+                if st.button("Update", key=f"update_{patient['patient_id']}"):
+                    # Update status
+                    st.session_state.simulation.db.update_patient_status(
+                        patient['patient_id'],
+                        new_status
+                    )
+                    
+                    # Handle transfer if department changed
+                    if new_dept != patient['department_name']:
+                        dept_id = next(
+                            (k for k, v in st.session_state.simulation.db.departments.items() 
+                             if v["name"] == new_dept),
+                            None
+                        )
+                        if dept_id:
+                            if st.session_state.simulation.db.transfer_patient(patient['patient_id'], dept_id):
+                                st.success(f"Patient transferred to {new_dept}")
+                            else:
+                                st.error(f"Transfer failed - {new_dept} is full")
+                
+                if st.button("Discharge", key=f"discharge_{patient['patient_id']}"):
+                    # Remove patient from the system
+                    if patient['patient_id'] in st.session_state.simulation.db.patients:
+                        del st.session_state.simulation.db.patients[patient['patient_id']]
+                        st.success(f"Patient {patient['patient_id']} discharged")
+                        st.rerun()
+
+def display_activity_feed():
+    """Display recent activities in the hospital with filtering options."""
+    st.subheader("📋 Recent Activities")
+    
+    # Get recent events
+    events = st.session_state.simulation.lifecycle_manager.get_recent_events()
+    
+    if not events:
+        st.info("No recent activities")
+        return
+    
+    # Filter options
+    col1, col2 = st.columns(2)
+    with col1:
+        filter_location = st.multiselect(
+            "Filter by Location",
+            options=list(set(event.location for event in events)),
+            default=[]
+        )
+    with col2:
+        filter_type = st.multiselect(
+            "Filter by Event Type",
+            options=["Transfer", "Status Update", "Admission", "Treatment"],
+            default=[]
+        )
+    
+    # Display filtered events
+    for event in events:
+        # Apply filters
+        if filter_location and event.location not in filter_location:
+            continue
+        if filter_type:
+            event_type = next((t for t in filter_type if t.lower() in event.description.lower()), None)
+            if not event_type:
+                continue
+        
+        with st.container():
+            cols = st.columns([1, 3])
+            with cols[0]:
+                st.text(event.timestamp.strftime("%H:%M:%S"))
+            with cols[1]:
+                st.markdown(f"**{event.description}**")
+                if event.biometric_data:
+                    with st.expander("Vital Signs"):
+                        for key, value in event.biometric_data.items():
+                            st.text(f"{key}: {value}")
+
+def display_simulation_controls():
+    """Display simulation control buttons."""
+    st.sidebar.header("⚙️ Simulation Controls")
+    
+    # Play/Pause button
+    if st.sidebar.button("▶️ Start" if not st.session_state.is_running else "⏸️ Pause"):
+        st.session_state.is_running = not st.session_state.is_running
+        if st.session_state.is_running:
+            st.session_state.last_update = datetime.now()
+    
+    # Reset button
+    if st.sidebar.button("🔄 Reset Simulation"):
+        reset_simulation()
+    
+    # Speed control
+    st.sidebar.slider(
+        "🚀 Simulation Speed",
+        min_value=0.1,
+        max_value=5.0,
+        value=st.session_state.simulation_speed,
+        step=0.1,
+        key="simulation_speed",
+        help="Adjust how fast the simulation runs"
+    )
+    
+    # Display current simulation time
+    if st.session_state.is_running:
+        st.sidebar.metric(
+            "⏰ Simulation Time",
+            st.session_state.simulation.current_time.strftime("%H:%M:%S"),
+            delta="Running" if st.session_state.is_running else "Paused"
+        )
 
 def main():
     st.set_page_config(
-        page_title="Healthcare Simulation",
+        page_title="Hospital Simulation",
         page_icon="🏥",
         layout="wide"
     )
@@ -240,8 +307,32 @@ def main():
     if 'simulation' not in st.session_state:
         reset_simulation()
     
-    # Display interface
-    display_interface()
+    # Title and description
+    st.title("🏥 Hospital Simulation Dashboard")
+    st.markdown("""
+    This dashboard shows real-time hospital operations, patient status, and department activities.
+    Use the controls in the sidebar to manage the simulation.
+    """)
+    
+    # Display simulation controls in sidebar
+    display_simulation_controls()
+    
+    # Update simulation state
+    update_simulation()
+    
+    # Main content area
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Hospital overview section
+        display_hospital_overview()
+        st.divider()
+        # Patient monitor section
+        display_patient_monitor()
+    
+    with col2:
+        # Activity feed section
+        display_activity_feed()
 
 if __name__ == "__main__":
     main() 
